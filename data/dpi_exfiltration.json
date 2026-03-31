@@ -1,0 +1,48 @@
+{
+  "stage": "Exfiltration",
+  "ip_pool": [
+    "172.16.0.20",
+    "172.16.0.21",
+    "172.16.0.22",
+    "172.16.0.23",
+    "172.16.0.24",
+    "172.16.0.25"
+  ],
+  "entries": [
+    {
+      "src_ip": "172.16.0.20",
+      "dst_ip": "172.16.0.25",
+      "protocol": "HTTPS",
+      "payload_summary": "Large encrypted POST to external C2 server, 48MB payload",
+      "flags": ["TLS", "LARGE_PAYLOAD"]
+    },
+    {
+      "src_ip": "172.16.0.21",
+      "dst_ip": "172.16.0.25",
+      "protocol": "DNS",
+      "payload_summary": "DNS tunneling with base64-encoded data in TXT records",
+      "flags": ["TUNNEL", "ENCODED"]
+    },
+    {
+      "src_ip": "172.16.0.22",
+      "dst_ip": "172.16.0.24",
+      "protocol": "FTP",
+      "payload_summary": "Bulk file transfer of compressed archive to staging server",
+      "flags": ["DATA", "COMPRESSED"]
+    },
+    {
+      "src_ip": "172.16.0.20",
+      "dst_ip": "172.16.0.23",
+      "protocol": "ICMP",
+      "payload_summary": "ICMP covert channel carrying fragmented data chunks",
+      "flags": ["COVERT", "FRAGMENTED"]
+    },
+    {
+      "src_ip": "172.16.0.21",
+      "dst_ip": "172.16.0.25",
+      "protocol": "TCP",
+      "payload_summary": "Steganographic data embedded in HTTP image responses",
+      "flags": ["STEGO", "HTTP"]
+    }
+  ]
+}

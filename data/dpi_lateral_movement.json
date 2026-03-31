@@ -1,0 +1,48 @@
+{
+  "stage": "Lateral_Movement",
+  "ip_pool": [
+    "192.168.1.10",
+    "192.168.1.11",
+    "192.168.1.12",
+    "192.168.1.13",
+    "192.168.1.14",
+    "192.168.1.15"
+  ],
+  "entries": [
+    {
+      "src_ip": "192.168.1.10",
+      "dst_ip": "192.168.1.11",
+      "protocol": "SMB",
+      "payload_summary": "Pass-the-hash authentication attempt on ADMIN$",
+      "flags": ["AUTH", "NTLM"]
+    },
+    {
+      "src_ip": "192.168.1.10",
+      "dst_ip": "192.168.1.12",
+      "protocol": "RDP",
+      "payload_summary": "Remote desktop login with stolen credentials",
+      "flags": ["AUTH"]
+    },
+    {
+      "src_ip": "192.168.1.11",
+      "dst_ip": "192.168.1.13",
+      "protocol": "WMI",
+      "payload_summary": "WMI remote execution of PowerShell payload",
+      "flags": ["EXEC"]
+    },
+    {
+      "src_ip": "192.168.1.12",
+      "dst_ip": "192.168.1.14",
+      "protocol": "SSH",
+      "payload_summary": "SSH lateral hop using harvested private key",
+      "flags": ["AUTH", "KEY"]
+    },
+    {
+      "src_ip": "192.168.1.13",
+      "dst_ip": "192.168.1.15",
+      "protocol": "TCP",
+      "payload_summary": "PsExec service installation on remote host",
+      "flags": ["SYN", "EXEC"]
+    }
+  ]
+}

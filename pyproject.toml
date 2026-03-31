@@ -1,0 +1,19 @@
+[project]
+name = "openenv-soc-trilemma"
+version = "1.0.0"
+description = "A 3-stage Cyber Kill Chain RL environment for agentic SOC training"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2.0",
+    "pyyaml",
+    "openenv-core>=0.1.0",
+]
+
+[project.scripts]
+server = "server.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

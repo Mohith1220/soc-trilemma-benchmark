@@ -1,0 +1,11 @@
+# Runtime dependencies
+fastapi
+uvicorn[standard]
+pydantic>=2.0
+pyyaml
+httpx
+openenv-core>=0.2.3
+
+# Test dependencies
+hypothesis
+pytest

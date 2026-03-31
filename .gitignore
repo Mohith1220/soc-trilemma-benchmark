@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing & hypothesis
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# IDE / AI agent metadata
+.kiro/
+.cursor/
+.idea/
+.vscode/
+
+# Logs
+*.log
+test_output.log
+
+# uv
+uv.lock
+
+# Docker
+*.tar
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,49 @@
+{
+  "stage": "Recon",
+  "ip_pool": [
+    "10.0.0.1",
+    "10.0.0.2",
+    "10.0.0.3",
+    "10.0.0.4",
+    "10.0.0.5",
+    "10.0.0.6",
+    "10.0.0.7"
+  ],
+  "entries": [
+    {
+      "src_ip": "10.0.0.1",
+      "dst_ip": "10.0.0.5",
+      "protocol": "TCP",
+      "payload_summary": "SYN scan on ports 22,80,443",
+      "flags": ["SYN"]
+    },
+    {
+      "src_ip": "10.0.0.1",
+      "dst_ip": "10.0.0.6",
+      "protocol": "ICMP",
+      "payload_summary": "ICMP echo request sweep",
+      "flags": ["ECHO_REQUEST"]
+    },
+    {
+      "src_ip": "10.0.0.2",
+      "dst_ip": "10.0.0.7",
+      "protocol": "UDP",
+      "payload_summary": "DNS query for internal hostnames",
+      "flags": []
+    },
+    {
+      "src_ip": "10.0.0.1",
+      "dst_ip": "10.0.0.3",
+      "protocol": "TCP",
+      "payload_summary": "Banner grabbing on port 21",
+      "flags": ["SYN", "ACK"]
+    },
+    {
+      "src_ip": "10.0.0.2",
+      "dst_ip": "10.0.0.4",
+      "protocol": "TCP",
+      "payload_summary": "OS fingerprinting via TCP options",
+      "flags": ["SYN"]
+    }
+  ]
+}

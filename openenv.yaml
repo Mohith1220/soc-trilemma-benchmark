@@ -1,0 +1,16 @@
+name: soc-trilemma-benchmark
+version: "1.0.0"
+entry_point: app.app:app
+description: >
+  A 3-stage Cyber Kill Chain RL environment where an agent acts as a SOC analyst
+  triaging DPI alerts under SLA pressure. Features seeded determinism, cascading
+  outage penalties, and MCP tool discovery.
+supported_tasks:
+  - tasks/easy.yaml
+  - tasks/medium.yaml
+  - tasks/hard.yaml
+  - tasks/expert.yaml
+scoring:
+  deterministic: true
+  metric: survival_score
+  range: [0.0, 1.0]

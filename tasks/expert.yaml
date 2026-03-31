@@ -1,0 +1,7 @@
+max_steps: 60
+stage_time_budgets:
+  Recon: 15
+  Lateral_Movement: 12
+  Exfiltration: 10
+sla_penalty_rate: 0.20
+num_decoys: 6
