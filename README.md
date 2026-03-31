@@ -1,10 +1,13 @@
 # 🛡️ SOC Trilemma Benchmark
 
 [![Tests](https://img.shields.io/badge/tests-114%20passing-brightgreen)]()
-[![OpenEnv](https://img.shields.io/badge/openenv%20validate-OK-blue)]()
+[![OpenEnv](https://img.shields.io/badge/openenv%20validate-6%2F6-blue)]()
 [![Determinism](https://img.shields.io/badge/seed%2042-0.2000%20locked-brightgreen)]()
+[![Tasks](https://img.shields.io/badge/tasks-4%20difficulties-orange)]()
+[![MCP](https://img.shields.io/badge/MCP-4%20tools-purple)]()
 [![Python](https://img.shields.io/badge/python-3.11-blue)]()
 [![Docker](https://img.shields.io/badge/docker-UID%201000-green)]()
+[![HF Space](https://img.shields.io/badge/HF%20Space-live-yellow)]()
 
 > A research-grade RL environment where an agent plays a SOC analyst navigating the **Security Trilemma**: stop the attack, don't break the company, and do it before time runs out.
 > Built for the Meta PyTorch Foundation OpenEnv Hackathon 2026.
@@ -84,24 +87,25 @@ All 12 IPs show `"Standard Traffic"` by default. The agent must spend **5 ticks*
 
 Every episode is fully reproducible. `random.Random(seed)` controls attacker assignment, decoy selection, business tier distribution, and pivot destination. **Same seed always produces the same score.**
 
-Baseline agent (random policy) scores across seeds — verified across 3 independent runs (cold start, warm state, server restart):
+Verified across 3 independent runs — cold start, warm state, and server restart:
 
-| Seed | Score | Consistent Across All Runs |
-|---|---|---|
-| 1 | 0.2000 | ✅ |
-| 7 | 0.0000 | ✅ |
-| 42 | 0.2000 | ✅ |
-| 99 | 0.0000 | ✅ |
+| Seed | Score | Cold Start | Warm State | After Restart |
+|---|---|---|---|---|
+| 1 | 0.2000 | ✅ | ✅ | ✅ |
+| 7 | 0.0000 | ✅ | ✅ | ✅ |
+| 42 | 0.2000 | ✅ | ✅ | ✅ |
+| 99 | 0.0000 | ✅ | ✅ | ✅ |
 
 ### Hardening
 
 - **Atomic State Locking** — `asyncio.Lock` per session prevents race conditions under concurrent load
+- **LRU Session Eviction** — `OrderedDict`-based cap at 100 sessions, oldest evicted automatically
 - **Adversarial Suite** — dedicated test suite probing concurrent resets, mid-episode restarts, and SLA bleed edge cases
 - **114 tests passing** — unit, integration, property-based (Hypothesis), and WebSocket lifecycle
 
 ### Hybrid Reward Function — Shock + Bleed Model
 
-The scoring system uses a two-layer model that simulates both the immediate impact of an outage and its long-term recovery cost. All mutations are applied to a `survival_score` initialised at `1.0`.
+All mutations apply to a `survival_score` initialised at `1.0`, clamped to `[0.0, 1.0]` after every step:
 
 | Event | Score Delta | Notes |
 |---|---|---|
@@ -112,13 +116,26 @@ The scoring system uses a two-layer model that simulates both the immediate impa
 | `query_dpi` / `wait` | 0.00 | No direct score change; tick cost still consumed |
 | Tick > 60 (timeout) | **−1.00** | Terminal failure — data exfiltrated |
 
-`survival_score` is clamped to `[0.0, 1.0]` and rounded to 8 decimal places after every mutation to ensure numerical stability for RL gradients.
-
 ```python
-# From soc_grader.py — the exact implementation
+# From soc_grader.py — exact implementation
 def _clamp(score: float) -> float:
     return round(max(0.0, min(1.0, score)), 8)
 ```
+
+---
+
+## Task Difficulties
+
+Four task configurations covering the full difficulty spectrum — all validated to produce scores in `[0.0, 1.0]`:
+
+| Task | Decoys | Penalty Rate | Max Steps | Time Budget (R/L/E) |
+|---|---|---|---|---|
+| `easy.yaml` | 2 | 0.05 / tick | 100 | 30 / 25 / 20 |
+| `medium.yaml` | 4 | 0.10 / tick | 85 | 25 / 20 / 15 |
+| `hard.yaml` | 4 | 0.10 / tick | 75 | 20 / 15 / 12 |
+| `expert.yaml` | 6 | 0.20 / tick | 60 | 15 / 12 / 10 |
+
+Expert mode: 6 decoys, 4× the penalty rate of easy, and a tick budget that matches the hard deadline — no margin for error.
 
 ---
 
@@ -126,7 +143,7 @@ def _clamp(score: float) -> float:
 
 ### MCP (Model Context Protocol) — JSON-RPC 2.0
 
-The environment exposes a full MCP tool surface for LLM agents:
+The environment exposes a full MCP tool surface for LLM agents. Compliant with the OpenEnv validator's `tools/list` discovery requirement:
 
 ```bash
 curl -X POST http://localhost:7860/mcp \
@@ -150,7 +167,7 @@ curl -X POST http://localhost:7860/mcp \
 | `/state` | GET | Read current observation |
 | `/mcp` | POST | JSON-RPC 2.0 tool discovery |
 | `/schema` | GET | Pydantic-validated Action / Observation schemas |
-| `/health` | GET | Liveness probe |
+| `/health` | GET | Liveness probe — returns `{"status": "healthy"}` |
 | `/metadata` | GET | Environment name, version, tasks |
 | `/web` | GET | Interactive SIEM dashboard |
 | `/docs` | GET | Swagger UI |
@@ -185,9 +202,16 @@ curl -X POST http://localhost:7860/mcp \
 pip install -r requirements.txt
 uvicorn app.app:app --host 0.0.0.0 --port 7860
 
-# Run the baseline agent
+# Random policy baseline (determinism audit)
 python inference.py --url http://localhost:7860 --seed 42
+# → Mode: random policy
 # → Final Survival Score: 0.2000
+
+# LLM policy (OpenAI-compatible — set env vars first)
+export API_BASE_URL=https://your-hf-space.hf.space
+export MODEL_NAME=meta-llama/Llama-3-70b-instruct
+export HF_TOKEN=hf_...
+python inference.py --url http://localhost:7860 --seed 42
 
 # Docker
 docker build -t soc-trilemma .
@@ -200,30 +224,66 @@ openenv validate --url http://localhost:7860
 
 ---
 
+## Environment Variables
+
+Required by the OpenEnv validator — injected at runtime:
+
+| Variable | Description |
+|---|---|
+| `API_BASE_URL` | API endpoint for the LLM (e.g. your HF Space URL) |
+| `MODEL_NAME` | Model identifier (e.g. `meta-llama/Llama-3-70b-instruct`) |
+| `HF_TOKEN` | Hugging Face API key |
+
+`inference.py` auto-detects: if all three are set it uses the OpenAI client; otherwise falls back to the seeded random policy for determinism validation.
+
+---
+
+## Verification
+
+```
+openenv validate .                            → [OK] 6/6 criteria passed
+openenv validate --url http://localhost:7860  → passed: true
+pytest tests/ -q                              → 114 passed
+python pre_submit_check.py                    → [VERDICT]: ENVIRONMENT LOCKED
+Deterministic Replay Audit (3 runs)           → seeds 1, 7, 42, 99 identical across all runs
+```
+
+---
+
 ## Project Structure
 
 ```
 app/
   app.py             FastAPI server — HTTP, WebSocket, MCP, SIEM dashboard
   session_manager.py Episode state, pivot logic, tier assignment, asyncio.Lock
-  soc_grader.py      Tiered SLA penalties and reward function
+  soc_grader.py      Tiered SLA penalties and hybrid reward function
   models.py          Pydantic v2 Action / Observation models
   kill_chain.py      3-stage FSM (Recon → Lateral → Exfil)
   seed_engine.py     Deterministic role assignment
+  config.py          Task YAML loader and validator
+  dpi_loader.py      DPI template loader per stage
 
 tasks/
-  easy.yaml          2 decoys, 0.05 penalty rate
-  hard.yaml          4 decoys, 0.10 penalty rate
+  easy.yaml          2 decoys, 0.05 penalty rate, 100 max steps
+  medium.yaml        4 decoys, 0.10 penalty rate, 85 max steps
+  hard.yaml          4 decoys, 0.10 penalty rate, 75 max steps
+  expert.yaml        6 decoys, 0.20 penalty rate, 60 max steps
 
 tests/
-  unit/              Component-level tests
+  unit/              Component-level tests (kill chain, grader, session, seed)
   integration/       Full HTTP + WebSocket episode lifecycle
   property/          25 Hypothesis correctness properties
   adversarial_suite  Concurrent load, race condition, and bleed edge cases
 
-inference.py         Baseline random-policy agent CLI
-openenv.yaml         OpenEnv manifest (name, version, entry_point, scoring)
-Dockerfile           UID 1000, HEALTHCHECK, Hugging Face Spaces ready
+data/
+  dpi_recon.json           DPI templates for Recon stage
+  dpi_lateral_movement.json DPI templates for Lateral Movement stage
+  dpi_exfiltration.json    DPI templates for Exfiltration stage
+
+server/app.py        uvicorn entry point
+inference.py         Dual-mode agent: OpenAI client (LLM) or seeded random policy
+openenv.yaml         OpenEnv manifest — name, version, 4 tasks, scoring config
+Dockerfile           UID 1000, HEALTHCHECK, port 7860, HF Spaces ready
 ```
 
 ---
