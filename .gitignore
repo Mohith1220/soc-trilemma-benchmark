@@ -30,8 +30,6 @@ htmlcov/
 *.log
 test_output.log
 
-# uv
-uv.lock
 
 # Docker
 *.tar
