@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, StrictInt, field_validator
+from pydantic import BaseModel, field_validator
 
 
 class KillChainStage(str, Enum):
@@ -99,9 +99,7 @@ class TaskConfig(BaseModel):
 
 
 class ResetRequest(BaseModel):
-    model_config = ConfigDict(strict=True)
-
-    seed: StrictInt
+    seed: Optional[int] = 42
     session_id: Optional[str] = None
 
 

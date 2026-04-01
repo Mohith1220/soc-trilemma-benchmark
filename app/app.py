@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -407,9 +407,12 @@ doReset();
     # ------------------------------------------------------------------
 
     @application.post("/reset", response_model=Observation)
-    def reset(request: ResetRequest) -> Observation:
+    def reset(request: Optional[ResetRequest] = None) -> Observation:
+        if request is None:
+            request = ResetRequest(seed=42, session_id="default")
         session_id = request.session_id or "default"
-        return session_manager.create_or_reset(session_id, seed=request.seed)
+        seed = request.seed if request.seed is not None else 42
+        return session_manager.create_or_reset(session_id, seed=seed)
 
     @application.post("/step", response_model=Observation)
     def step(action: Action) -> Observation:
