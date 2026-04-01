@@ -6,7 +6,7 @@ colorTo: blue
 sdk: docker
 app_port: 7860
 license: mit
-short_description: 3-stage Cyber Kill Chain RL environment for agentic SOC triage
+short_description: Cyber Kill Chain RL env for agentic SOC triage
 ---
 
 # 🛡️ SOC Trilemma Benchmark
