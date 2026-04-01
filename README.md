@@ -1,14 +1,3 @@
----
-title: SOC Trilemma Benchmark
-emoji: 🛡️
-colorFrom: green
-colorTo: blue
-sdk: docker
-app_port: 7860
-license: mit
-short_description: Cyber Kill Chain RL env for agentic SOC triage
----
-
 # 🛡️ SOC Trilemma Benchmark
 
 [![Tests](https://img.shields.io/badge/tests-114%20passing-brightgreen)]()
