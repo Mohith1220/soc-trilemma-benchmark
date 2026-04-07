@@ -13,9 +13,9 @@ _TIER_PENALTY: dict[str, float] = {
 def _clamp(score: float) -> float:
     """
     Clamp score strictly inside (0,1) range required by OpenEnv.
-    Prevents exact 0.0 and 1.0.
+    Prevents exact 0.0 and 1.0 with wide safety margin.
     """
-    epsilon = 0.005
+    epsilon = 0.1
     return max(epsilon, min(1.0 - epsilon, score))
 
 
@@ -32,7 +32,7 @@ class SOCGrader:
     ) -> None:
         self.sla_penalty_rate = sla_penalty_rate
         self.ip_tiers = ip_tiers or {}
-        self.survival_score = 0.995  # Start at ceiling to avoid exact 1.0
+        self.survival_score = 0.9  # Start at safe ceiling with wide margin
         self.active_outages = []
 
     def _penalty_for(self, target_ip: str) -> float:

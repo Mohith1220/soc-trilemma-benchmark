@@ -38,7 +38,7 @@ MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
 
 BENCHMARK: str = "soc-trilemma-benchmark"
 
-_EPSILON = 0.005
+_EPSILON = 0.1
 
 
 def _clamp_score(score: float) -> float:
@@ -133,10 +133,10 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
     action_types = list(ActionType)
 
     n: int = 0
-    score: float = 0.005  # Default to safe padded score
+    score: float = 0.1  # Default to safe padded score with wide margin
     success: bool = False
     rewards_list: list[float] = []
-    prev_score: float = 1.0
+    prev_score: float = 0.9
 
     print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}", flush=True)
 
@@ -223,7 +223,7 @@ def main() -> None:
     if not server_ready:
         print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}", flush=True)
         print("[STEP] step=0 action= reward=0.0000 done=false error=timeout", flush=True)
-        print("[END] success=false steps=0 score=0.0050 rewards=", flush=True)
+        print("[END] success=false steps=0 score=0.1000 rewards=", flush=True)
         return
     
     # If ready, run the actual episode

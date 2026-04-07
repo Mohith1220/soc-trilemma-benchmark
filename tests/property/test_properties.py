@@ -281,7 +281,7 @@ def test_sla_penalties_apply_per_active_outage_per_tick(
             BusinessOutage(target_ip=f"10.0.0.{i + 1}", created_at_tick=0, penalty_per_tick=rate)
         )
     expected_penalty = n_outages * rate * tick_cost
-    expected_score = max(0.005, min(0.995, round(initial_score - expected_penalty, 10)))
+    expected_score = max(0.1, min(0.9, round(initial_score - expected_penalty, 10)))
     grader.apply_tick_penalties(tick_cost)
     assert abs(grader.survival_score - expected_score) < 1e-3
 
@@ -306,11 +306,11 @@ def test_survival_score_always_clamped(
             action = _make_action(ActionType.BlockIP, decoy_ip)
             grader.grade_action(action, attacker_ip, tick)
         grader.apply_tick_penalties(tick_cost)
-        assert 0.0 <= grader.survival_score <= 1.0
+        assert 0.1 <= grader.survival_score <= 0.9
     # Apply correct block to drive score up
     action = _make_action(ActionType.BlockIP, attacker_ip)
     grader.grade_action(action, attacker_ip, tick)
-    assert 0.0 <= grader.survival_score <= 1.0
+    assert 0.1 <= grader.survival_score <= 0.9
 
 
 @settings(max_examples=100)
@@ -344,7 +344,7 @@ def test_resolving_outage_removes_it_from_active_penalties(
     score_before = grader.survival_score
     grader.apply_tick_penalties(tick_cost)
     # With epsilon clamp, score may shift by at most epsilon from boundary effects
-    assert abs(grader.survival_score - score_before) <= 0.005 + 1e-9
+    assert abs(grader.survival_score - score_before) <= 0.1 + 1e-9
 
 
 # --- Property 6: DPITemplate serialization round-trip ---
@@ -450,7 +450,7 @@ def test_reset_produces_clean_initial_observation(seed: int):
     assert obs.stage == KillChainStage.Recon
     assert obs.alerts == []
     assert obs.done is False
-    assert obs.survival_score == 0.995
+    assert obs.survival_score == 0.9
 
 
 # --- Property 17: Successful neutralization terminates the episode ---
