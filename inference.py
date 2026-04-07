@@ -20,6 +20,8 @@ import argparse
 import json
 import os
 import random
+import sys
+import time
 from typing import Any
 
 import httpx
@@ -103,6 +105,23 @@ def _llm_action(obs: dict[str, Any], session_id: str) -> dict[str, Any]:
     action = json.loads(raw)
     action["session_id"] = session_id
     return action
+
+
+def wait_for_server(url: str, timeout: int = 60) -> None:
+    """Wait for the environment server to become ready before running the episode."""
+    print(f"Waiting for server at {url}/health...", flush=True)
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            resp = httpx.get(f"{url}/health", timeout=5.0)
+            if resp.status_code == 200:
+                print("Server is ready!", flush=True)
+                return
+        except Exception:
+            pass
+        time.sleep(1)
+    print(f"Error: Server did not start within {timeout} seconds.", flush=True)
+    sys.exit(1)
 
 
 def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str = "easy") -> float:
@@ -196,6 +215,7 @@ def main() -> None:
 
     mode = f"LLM ({MODEL_NAME} @ {API_BASE_URL})" if _LLM_MODE else "random policy"
     print(f"Mode: {mode}", flush=True)
+    wait_for_server(args.url)
     run_episode(url=args.url, seed=args.seed, task_id=args.task)
 
 
