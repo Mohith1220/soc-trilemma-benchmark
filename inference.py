@@ -29,9 +29,11 @@ from app.models import ActionType
 # ---------------------------------------------------------------------------
 # Env-var configuration (injected by the OpenEnv validator at runtime)
 # ---------------------------------------------------------------------------
-HF_TOKEN: str | None = os.getenv("HF_TOKEN")  # must never have a default
+HF_TOKEN: str | None = os.getenv("HF_TOKEN")                          # NO default — ever
 API_BASE_URL: str = os.getenv("API_BASE_URL", "https://mohith1220-soc-trilemma-benchmark.hf.space")
 MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
+
+BENCHMARK: str = "soc-trilemma-benchmark"
 
 _LLM_MODE = bool(HF_TOKEN and API_BASE_URL and MODEL_NAME)
 
@@ -99,51 +101,82 @@ def _llm_action(obs: dict[str, Any], session_id: str) -> dict[str, Any]:
 def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str = "easy") -> float:
     """Run one episode against the environment server.
 
-    Args:
-        url: Base URL of the environment server.
-        seed: Integer seed for the episode.
-        session_id: Session identifier to use.
-        task_id: Task identifier for structured logging.
-
     Returns:
         Final survival score as a float.
     """
     rng = random.Random(seed)
     action_types = list(ActionType)
 
-    with httpx.Client(base_url=url, timeout=30.0) as client:
-        reset_resp = client.post("/reset", json={"seed": seed, "session_id": session_id})
-        reset_resp.raise_for_status()
-        obs: dict[str, Any] = reset_resp.json()
+    n: int = 0
+    score: float = 0.0
+    success: bool = False
+    rewards_list: list[float] = []
+    prev_score: float = 1.0
 
-        print(f"[START] task={task_id}", flush=True)
+    print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}", flush=True)
 
-        prev_score: float = obs["survival_score"]
-
-        while not obs["done"]:
-            if _LLM_MODE:
-                action = _llm_action(obs, session_id)
-            else:
-                action_type = rng.choice(action_types)
-                candidate_ips = [e["src_ip"] for e in obs["dpi_data"]["entries"]]
-                target_ip = rng.choice(candidate_ips)
-                action = {
-                    "action_type": action_type.value,
-                    "target_ip": target_ip,
-                    "session_id": session_id,
-                }
-
-            step_resp = client.post("/step", json=action)
-            step_resp.raise_for_status()
-            obs = step_resp.json()
-
-            reward = round(obs["survival_score"] - prev_score, 8)
+    try:
+        with httpx.Client(base_url=url, timeout=30.0) as client:
+            reset_resp = client.post("/reset", json={"seed": seed, "session_id": session_id})
+            reset_resp.raise_for_status()
+            obs: dict[str, Any] = reset_resp.json()
             prev_score = obs["survival_score"]
-            print(f"[STEP] step={obs['tick']} reward={reward}", flush=True)
 
-    final_score: float = obs["survival_score"]
-    print(f"[END] task={task_id} score={final_score} steps={obs['tick']}", flush=True)
-    return final_score
+            while not obs["done"]:
+                error_msg: str | None = None
+                action_str: str = ""
+
+                try:
+                    if _LLM_MODE:
+                        action = _llm_action(obs, session_id)
+                    else:
+                        action_type = rng.choice(action_types)
+                        candidate_ips = [e["src_ip"] for e in obs["dpi_data"]["entries"]]
+                        target_ip = rng.choice(candidate_ips)
+                        action = {
+                            "action_type": action_type.value,
+                            "target_ip": target_ip,
+                            "session_id": session_id,
+                        }
+
+                    action_str = f"{action['action_type']}('{action['target_ip']}')"
+
+                    step_resp = client.post("/step", json=action)
+                    step_resp.raise_for_status()
+                    obs = step_resp.json()
+
+                except Exception as exc:
+                    error_msg = str(exc)
+
+                n += 1
+                reward = round(obs["survival_score"] - prev_score, 8)
+                prev_score = obs["survival_score"]
+                rewards_list.append(reward)
+                done = obs["done"]
+
+                print(
+                    f"[STEP] step={n} action={action_str} reward={reward:.2f} "
+                    f"done={str(done).lower()} error={error_msg or 'null'}",
+                    flush=True,
+                )
+
+
+                if error_msg:
+                    break
+
+            score = obs["survival_score"]
+            success = obs["done"]
+
+    except Exception as exc:
+        error_msg = str(exc)
+        print(f"[STEP] step={n} action= reward=0.00 done=false error={error_msg}", flush=True)
+
+    print(
+        f"[END] success={str(success).lower()} steps={n} score={score:.2f} "
+        f"rewards={','.join(f'{r:.2f}' for r in rewards_list)}",
+        flush=True,
+    )
+    return score
 
 
 def main() -> None:
