@@ -12,21 +12,21 @@ tasks:
     grader:
       script: inference.py
       metric: survival_score
-      score_range: [0.005, 0.995]
+      score_range: [0.0, 1.0]
   - id: medium
     path: tasks/medium.yaml
     grader:
       script: inference.py
       metric: survival_score
-      score_range: [0.005, 0.995]
+      score_range: [0.0, 1.0]
   - id: hard
     path: tasks/hard.yaml
     grader:
       script: inference.py
       metric: survival_score
-      score_range: [0.005, 0.995]
+      score_range: [0.0, 1.0]
 
 scoring:
   deterministic: true
   metric: survival_score
-  range: [0.005, 0.995]
+  range: [0.0, 1.0]
