@@ -27,13 +27,13 @@ import httpx
 from app.models import ActionType
 
 # ---------------------------------------------------------------------------
-# Env-var configuration (injected by the OpenEnv validator)
+# Env-var configuration (injected by the OpenEnv validator at runtime)
 # ---------------------------------------------------------------------------
-API_BASE_URL: str | None = os.getenv("API_BASE_URL")
-MODEL_NAME: str | None = os.getenv("MODEL_NAME")
-HF_TOKEN: str | None = os.getenv("HF_TOKEN")
+HF_TOKEN: str | None = os.getenv("HF_TOKEN")  # must never have a default
+API_BASE_URL: str = os.getenv("API_BASE_URL", "https://mohith1220-soc-trilemma-benchmark.hf.space")
+MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
 
-_LLM_MODE = bool(API_BASE_URL and MODEL_NAME)
+_LLM_MODE = bool(HF_TOKEN and API_BASE_URL and MODEL_NAME)
 
 _SYSTEM_PROMPT = """\
 You are a SOC analyst agent operating inside the SOC Trilemma RL environment.
@@ -60,11 +60,11 @@ Strategy hints:
 
 def _llm_action(obs: dict[str, Any], session_id: str) -> dict[str, Any]:
     """Ask the LLM for the next action given the current observation."""
-    from openai import OpenAI  # imported lazily — not required in random mode
+    from openai import OpenAI
 
     client = OpenAI(
-        base_url=API_BASE_URL,
-        api_key=HF_TOKEN or "no-key",
+        base_url=f"{API_BASE_URL}/v1",
+        api_key=HF_TOKEN,
     )
 
     user_msg = json.dumps({
@@ -90,20 +90,20 @@ def _llm_action(obs: dict[str, Any], session_id: str) -> dict[str, Any]:
     )
 
     raw = response.choices[0].message.content or ""
-    # Strip markdown fences if the model wraps the JSON
     raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     action = json.loads(raw)
-    action["session_id"] = session_id  # ensure session_id is always correct
+    action["session_id"] = session_id
     return action
 
 
-def run_episode(url: str, seed: int, session_id: str = "baseline") -> float:
+def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str = "easy") -> float:
     """Run one episode against the environment server.
 
     Args:
         url: Base URL of the environment server.
         seed: Integer seed for the episode.
         session_id: Session identifier to use.
+        task_id: Task identifier for structured logging.
 
     Returns:
         Final survival score as a float.
@@ -112,16 +112,18 @@ def run_episode(url: str, seed: int, session_id: str = "baseline") -> float:
     action_types = list(ActionType)
 
     with httpx.Client(base_url=url, timeout=30.0) as client:
-        # Reset the environment
         reset_resp = client.post("/reset", json={"seed": seed, "session_id": session_id})
         reset_resp.raise_for_status()
         obs: dict[str, Any] = reset_resp.json()
+
+        print(f"[START] task={task_id}", flush=True)
+
+        prev_score: float = obs["survival_score"]
 
         while not obs["done"]:
             if _LLM_MODE:
                 action = _llm_action(obs, session_id)
             else:
-                # Seeded random policy — deterministic, used for numerical validation
                 action_type = rng.choice(action_types)
                 candidate_ips = [e["src_ip"] for e in obs["dpi_data"]["entries"]]
                 target_ip = rng.choice(candidate_ips)
@@ -135,8 +137,12 @@ def run_episode(url: str, seed: int, session_id: str = "baseline") -> float:
             step_resp.raise_for_status()
             obs = step_resp.json()
 
+            reward = round(obs["survival_score"] - prev_score, 8)
+            prev_score = obs["survival_score"]
+            print(f"[STEP] step={obs['tick']} reward={reward}", flush=True)
+
     final_score: float = obs["survival_score"]
-    print(f"Final Survival Score: {final_score:.4f}")
+    print(f"[END] task={task_id} score={final_score} steps={obs['tick']}", flush=True)
     return final_score
 
 
@@ -144,12 +150,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Baseline agent for OpenEnv SOC Trilemma")
     parser.add_argument("--url", default="http://localhost:7860", help="Base URL of the environment server")
     parser.add_argument("--seed", type=int, default=42, help="Integer seed for the episode")
-    parser.add_argument("--task", default="tasks/easy.yaml", help="Path to task YAML (informational only)")
+    parser.add_argument("--task", default="easy", help="Task ID for structured logging")
     args = parser.parse_args()
 
     mode = f"LLM ({MODEL_NAME} @ {API_BASE_URL})" if _LLM_MODE else "random policy"
-    print(f"Mode: {mode}")
-    run_episode(url=args.url, seed=args.seed)
+    print(f"Mode: {mode}", flush=True)
+    run_episode(url=args.url, seed=args.seed, task_id=args.task)
 
 
 if __name__ == "__main__":
