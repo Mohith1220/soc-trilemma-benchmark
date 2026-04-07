@@ -1,26 +1,19 @@
 name: soc-trilemma-benchmark
-version: "1.0.0"
 entry_point: app.app:app
+
 description: >
   A 3-stage Cyber Kill Chain RL environment where an agent acts as a SOC analyst
   triaging DPI alerts under SLA pressure. Features seeded determinism, cascading
   outage penalties, and MCP tool discovery.
+
 tasks:
-  - name: easy
-    grader:
-      script: inference.py
-      metric: survival_score
-      score_range: [0.005, 0.995]
-  - name: medium
-    grader:
-      script: inference.py
-      metric: survival_score
-      score_range: [0.005, 0.995]
-  - name: hard
-    grader:
-      script: inference.py
-      metric: survival_score
-      score_range: [0.005, 0.995]
+  - id: easy
+    path: tasks/easy.yaml
+  - id: medium
+    path: tasks/medium.yaml
+  - id: hard
+    path: tasks/hard.yaml
+
 scoring:
   deterministic: true
   metric: survival_score
