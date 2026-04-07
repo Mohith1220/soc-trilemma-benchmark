@@ -11,9 +11,12 @@ _TIER_PENALTY: dict[str, float] = {
 
 
 def _clamp(score: float) -> float:
-    # Prevents exact 0.0 and 1.0 (Scaler requirement)
-    epsilon = 0.005  # Using a slightly larger buffer to be safe
-    return round(max(epsilon, min(1.0 - epsilon, score)), 4)
+    """
+    Clamp score strictly inside (0,1) range required by OpenEnv.
+    Prevents exact 0.0 and 1.0.
+    """
+    epsilon = 0.005
+    return max(epsilon, min(1.0 - epsilon, score))
 
 
 class SOCGrader:
@@ -33,15 +36,17 @@ class SOCGrader:
         self.active_outages = []
 
     def _penalty_for(self, target_ip: str) -> float:
-        """Return the per-tick penalty rate for a given IP based on its business tier."""
+        """Return per-tick penalty rate for given IP based on tier."""
         tier = self.ip_tiers.get(target_ip)
         if tier and tier in _TIER_PENALTY:
             return _TIER_PENALTY[tier]
-        return self.sla_penalty_rate  # fallback to config rate
+        return self.sla_penalty_rate
 
     def grade_action(
         self, action: Action, attacker_ip: str, current_tick: int
     ) -> GradeResult:
+
+        # BLOCK IP
         if action.action_type == ActionType.BlockIP:
             if action.target_ip == attacker_ip:
                 self.survival_score = _clamp(self.survival_score + 0.2)
@@ -52,14 +57,19 @@ class SOCGrader:
                     survival_score=self.survival_score,
                 )
             else:
-                # Incorrect block — create outage with tiered penalty rate
+                # Incorrect block → create outage
                 penalty_rate = self._penalty_for(action.target_ip)
+
                 outage = BusinessOutage(
                     target_ip=action.target_ip,
                     created_at_tick=current_tick,
                     penalty_per_tick=penalty_rate,
                 )
                 self.active_outages.append(outage)
+
+                # apply shock penalty
+                self.survival_score = _clamp(self.survival_score - 0.1)
+
                 return GradeResult(
                     reward=-0.1,
                     outage_created=True,
@@ -67,6 +77,7 @@ class SOCGrader:
                     survival_score=self.survival_score,
                 )
 
+        # RESOLVE OUTAGE
         if action.action_type == ActionType.ResolveOutage:
             resolved = self.resolve_outage(action.target_ip)
             return GradeResult(
@@ -76,7 +87,7 @@ class SOCGrader:
                 survival_score=self.survival_score,
             )
 
-        # QueryDPI, AllowIP, IsolateHost, Wait — no score change
+        # QueryDPI / Wait etc
         return GradeResult(
             reward=0.0,
             outage_created=False,
@@ -85,15 +96,13 @@ class SOCGrader:
         )
 
     def apply_tick_penalties(self, tick_cost: int) -> None:
-        """Subtract tiered SLA penalties for every active outage.
-
-        Uses round() to avoid floating-point drift (e.g. 0.6500 → 0.6499999).
-        """
+        """Apply SLA bleed penalties for active outages."""
         penalty = sum(
             outage.penalty_per_tick * tick_cost for outage in self.active_outages
         )
+
         raw = self.survival_score - penalty
-        self.survival_score = _clamp(round(raw, 10))
+        self.survival_score = _clamp(raw)
 
     def resolve_outage(self, target_ip: str) -> bool:
         for i, outage in enumerate(self.active_outages):

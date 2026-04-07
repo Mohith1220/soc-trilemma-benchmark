@@ -43,9 +43,11 @@ def test_simultaneous_outages_accumulate():
     grader.grade_action(_action(ActionType.BlockIP, DECOY_B), ATTACKER, 0)
     assert len(grader.active_outages) == 2
 
-    # Each outage contributes 0.1 per tick; tick_cost=1 → total penalty = 0.2
+    # Each wrong block applies -0.1 shock: 1.0 - 0.1 - 0.1 = 0.8
+    # Then each outage contributes 0.1 per tick; tick_cost=1 → total penalty = 0.2
+    # Final: 0.8 - 0.2 = 0.6
     grader.apply_tick_penalties(tick_cost=1)
-    assert abs(grader.survival_score - 0.8) < 1e-9
+    assert abs(grader.survival_score - 0.6) < 1e-9
 
 
 def test_simultaneous_outages_each_contribute_independently():
@@ -53,9 +55,11 @@ def test_simultaneous_outages_each_contribute_independently():
     grader.survival_score = 1.0
     grader.grade_action(_action(ActionType.BlockIP, DECOY_A), ATTACKER, 0)
     grader.grade_action(_action(ActionType.BlockIP, DECOY_B), ATTACKER, 0)
+    # Each wrong block applies -0.1 shock: 1.0 - 0.1 - 0.1 = 0.8
     # 2 outages × 0.05 rate × 2 tick_cost = 0.2 penalty
+    # Final: 0.8 - 0.2 = 0.6
     grader.apply_tick_penalties(tick_cost=2)
-    assert abs(grader.survival_score - 0.8) < 1e-9
+    assert abs(grader.survival_score - 0.6) < 1e-9
 
 
 # --- resolve_outage removes only the targeted outage ---

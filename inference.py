@@ -42,7 +42,7 @@ _EPSILON = 0.005
 
 def _clamp_score(score: float) -> float:
     """Mirror soc_grader epsilon clamp so [END] score matches grader output."""
-    return round(max(_EPSILON, min(1.0 - _EPSILON, score)), 4)
+    return max(_EPSILON, min(1.0 - _EPSILON, score))
 
 _LLM_MODE = bool(HF_TOKEN and API_BASE_URL and MODEL_NAME)
 
