@@ -162,7 +162,7 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
                 done = obs["done"]
 
                 print(
-                    f"[STEP] step={n} action={action_str} reward={reward:.2f} "
+                    f"[STEP] step={n} action={action_str} reward={reward:.4f} "
                     f"done={str(done).lower()} error={error_msg or 'null'}",
                     flush=True,
                 )
@@ -176,12 +176,12 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
 
     except Exception as exc:
         error_msg = str(exc)
-        print(f"[STEP] step={n} action= reward=0.00 done=false error={error_msg}", flush=True)
+        print(f"[STEP] step={n} action= reward=0.0000 done=false error={error_msg}", flush=True)
 
     clamped_score = _clamp_score(score)
     print(
-        f"[END] success={str(success).lower()} steps={n} score={clamped_score:.2f} "
-        f"rewards={','.join(f'{r:.2f}' for r in rewards_list)}",
+        f"[END] success={str(success).lower()} steps={n} score={clamped_score:.4f} "
+        f"rewards={','.join(f'{r:.4f}' for r in rewards_list)}",
         flush=True,
     )
     return clamped_score
