@@ -5,10 +5,6 @@ description: >
   A 3-stage Cyber Kill Chain RL environment where an agent acts as a SOC analyst
   triaging DPI alerts under SLA pressure. Features seeded determinism, cascading
   outage penalties, and MCP tool discovery.
-supported_tasks:
-  - tasks/easy.yaml
-  - tasks/medium.yaml
-  - tasks/hard.yaml
 tasks:
   - tasks/easy.yaml
   - tasks/medium.yaml
