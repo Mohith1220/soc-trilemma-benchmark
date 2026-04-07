@@ -4,6 +4,7 @@ uvicorn[standard]
 pydantic>=2.0
 pyyaml
 httpx
+openai
 openenv-core>=0.2.3
 
 # Test dependencies

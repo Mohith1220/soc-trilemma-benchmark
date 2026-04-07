@@ -25,6 +25,7 @@ import time
 from typing import Any
 
 import httpx
+from openai import OpenAI
 
 from app.models import ActionType
 
@@ -71,8 +72,6 @@ Strategy hints:
 
 def _llm_action(obs: dict[str, Any], session_id: str) -> dict[str, Any]:
     """Ask the LLM for the next action given the current observation."""
-    from openai import OpenAI
-
     client = OpenAI(
         base_url=f"{API_BASE_URL}/v1",
         api_key=HF_TOKEN,

@@ -28,6 +28,7 @@ COPY --chown=appuser:appuser server/ ./server/
 COPY --chown=appuser:appuser data/ ./data/
 COPY --chown=appuser:appuser tasks/ ./tasks/
 COPY --chown=appuser:appuser openenv.yaml .
+COPY --chown=appuser:appuser inference.py .
 COPY --chown=appuser:appuser pyproject.toml .
 
 # Switch to the non-root user
