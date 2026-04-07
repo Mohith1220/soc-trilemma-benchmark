@@ -1,5 +1,5 @@
-# Use a slim but tool-complete base
-FROM python:3.11-slim
+# Use full python:3.11 to avoid registry timeout on slim layer pull
+FROM python:3.11
 
 # Set environment variables for Python and OpenEnv
 ENV PYTHONDONTWRITEBYTECODE=1 \
