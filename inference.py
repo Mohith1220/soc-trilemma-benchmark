@@ -218,17 +218,17 @@ def main() -> None:
 
     mode = f"LLM ({MODEL_NAME} @ {API_BASE_URL})" if _LLM_MODE else "random policy"
     print(f"Mode: {mode}", flush=True)
-    print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}", flush=True)
     
     # Try to wait for the server. If it fails, print safe fallback and exit cleanly
     server_ready = wait_for_server(args.url)
     if not server_ready:
+        print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}", flush=True)
         print("[STEP] step=0 action= reward=0.0000 done=false error=timeout", flush=True)
         print("[END] success=false steps=0 score=0.0050 rewards=", flush=True)
         return
     
     # If ready, run the actual episode
-    run_episode(url=args.url, seed=args.seed, task_id=task_id)
+    run_episode(url=args.url, seed=args.seed, session_id="baseline", task_id=task_id)
 
 
 if __name__ == "__main__":
