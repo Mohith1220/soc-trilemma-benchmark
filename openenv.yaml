@@ -9,6 +9,10 @@ supported_tasks:
   - tasks/easy.yaml
   - tasks/medium.yaml
   - tasks/hard.yaml
+tasks:
+  - tasks/easy.yaml
+  - tasks/medium.yaml
+  - tasks/hard.yaml
 grader:
   script: inference.py
   metric: survival_score

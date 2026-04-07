@@ -189,9 +189,9 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Baseline agent for OpenEnv SOC Trilemma")
-    parser.add_argument("--url", default="http://localhost:7860", help="Base URL of the environment server")
-    parser.add_argument("--seed", type=int, default=42, help="Integer seed for the episode")
-    parser.add_argument("--task", default="easy", help="Task ID for structured logging")
+    parser.add_argument("--url", default=os.getenv("ENV_URL", "http://localhost:7860"), help="Base URL of the environment server")
+    parser.add_argument("--seed", type=int, default=int(os.getenv("TASK_SEED", "42")), help="Integer seed for the episode")
+    parser.add_argument("--task", default=os.getenv("TASK_NAME", os.getenv("TASK", "easy")), help="Task ID for structured logging")
     args = parser.parse_args()
 
     mode = f"LLM ({MODEL_NAME} @ {API_BASE_URL})" if _LLM_MODE else "random policy"
