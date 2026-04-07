@@ -35,7 +35,7 @@ def test_ws_reset_returns_initial_observation(client: TestClient) -> None:
 
     assert data["stage"] == "Recon"
     assert data["done"] is False
-    assert data["survival_score"] == 1.0
+    assert data["survival_score"] == 0.995
     assert data["tick"] == 0
     assert data["alerts"] == []
     assert data["dom"] != ""

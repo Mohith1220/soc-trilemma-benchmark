@@ -32,7 +32,7 @@ class SOCGrader:
     ) -> None:
         self.sla_penalty_rate = sla_penalty_rate
         self.ip_tiers = ip_tiers or {}
-        self.survival_score = 1.0
+        self.survival_score = 0.995  # Start at ceiling to avoid exact 1.0
         self.active_outages = []
 
     def _penalty_for(self, target_ip: str) -> float:

@@ -450,7 +450,7 @@ def test_reset_produces_clean_initial_observation(seed: int):
     assert obs.stage == KillChainStage.Recon
     assert obs.alerts == []
     assert obs.done is False
-    assert obs.survival_score == 1.0
+    assert obs.survival_score == 0.995
 
 
 # --- Property 17: Successful neutralization terminates the episode ---
