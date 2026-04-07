@@ -9,8 +9,7 @@ supported_tasks:
   - tasks/easy.yaml
   - tasks/medium.yaml
   - tasks/hard.yaml
-  - tasks/expert.yaml
 scoring:
   deterministic: true
   metric: survival_score
-  range: [0.001, 0.999]
+  range: [0.005, 0.995]
