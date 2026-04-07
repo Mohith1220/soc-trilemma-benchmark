@@ -35,7 +35,7 @@ MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
 
 BENCHMARK: str = "soc-trilemma-benchmark"
 
-_EPSILON = 0.001
+_EPSILON = 0.005
 
 
 def _clamp_score(score: float) -> float:

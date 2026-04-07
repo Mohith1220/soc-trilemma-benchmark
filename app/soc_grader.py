@@ -11,8 +11,8 @@ _TIER_PENALTY: dict[str, float] = {
 
 
 def _clamp(score: float) -> float:
-    # Forces score to be strictly (0, 1) per Scaler Phase 2 rules
-    epsilon = 0.001
+    # Prevents exact 0.0 and 1.0 (Scaler requirement)
+    epsilon = 0.005  # Using a slightly larger buffer to be safe
     return round(max(epsilon, min(1.0 - epsilon, score)), 4)
 
 
