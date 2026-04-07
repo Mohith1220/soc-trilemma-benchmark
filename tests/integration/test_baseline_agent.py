@@ -88,7 +88,8 @@ def test_baseline_agent_prints_final_score(capsys: pytest.CaptureFixture) -> Non
         score = run_episode(url="http://testserver", seed=99, session_id="print_test")
 
     captured = capsys.readouterr()
-    assert "Final Survival Score" in captured.out
+    assert "[END]" in captured.out
+    assert "score=" in captured.out
     assert 0.0 <= score <= 1.0
 
 

@@ -11,7 +11,9 @@ _TIER_PENALTY: dict[str, float] = {
 
 
 def _clamp(score: float) -> float:
-    return round(max(0.0, min(1.0, score)), 8)
+    # Forces score to be strictly (0, 1) per Scaler Phase 2 rules
+    epsilon = 0.001
+    return round(max(epsilon, min(1.0 - epsilon, score)), 4)
 
 
 class SOCGrader:

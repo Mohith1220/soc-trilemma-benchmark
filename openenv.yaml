@@ -13,4 +13,4 @@ supported_tasks:
 scoring:
   deterministic: true
   metric: survival_score
-  range: [0.0, 1.0]
+  range: [0.001, 0.999]

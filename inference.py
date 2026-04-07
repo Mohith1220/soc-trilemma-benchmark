@@ -35,6 +35,13 @@ MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
 
 BENCHMARK: str = "soc-trilemma-benchmark"
 
+_EPSILON = 0.001
+
+
+def _clamp_score(score: float) -> float:
+    """Mirror soc_grader epsilon clamp so [END] score matches grader output."""
+    return round(max(_EPSILON, min(1.0 - _EPSILON, score)), 4)
+
 _LLM_MODE = bool(HF_TOKEN and API_BASE_URL and MODEL_NAME)
 
 _SYSTEM_PROMPT = """\
@@ -171,12 +178,13 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
         error_msg = str(exc)
         print(f"[STEP] step={n} action= reward=0.00 done=false error={error_msg}", flush=True)
 
+    clamped_score = _clamp_score(score)
     print(
-        f"[END] success={str(success).lower()} steps={n} score={score:.2f} "
+        f"[END] success={str(success).lower()} steps={n} score={clamped_score:.2f} "
         f"rewards={','.join(f'{r:.2f}' for r in rewards_list)}",
         flush=True,
     )
-    return score
+    return clamped_score
 
 
 def main() -> None:
