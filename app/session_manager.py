@@ -271,8 +271,9 @@ class SessionManager:
         )
 
         if done and not correct_block and new_tick > 60:
-            state.soc_grader.survival_score = max(
-                0.0, state.soc_grader.survival_score - 1.0
+            from app.soc_grader import _clamp
+            state.soc_grader.survival_score = _clamp(
+                state.soc_grader.survival_score - 1.0
             )
             state.alerts.append(Alert(
                 message="Attacker exfiltrated data — mission failed",
