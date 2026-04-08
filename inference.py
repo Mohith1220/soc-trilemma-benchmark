@@ -1,352 +1,161 @@
-"""Baseline agent for OpenEnv SOC Trilemma.
+#!/usr/bin/env python3
+"""SOC Trilemma inference script — runs episodes locally and reports grader scores.
 
-Supports two modes:
-  1. LLM mode  — set API_BASE_URL, MODEL_NAME, HF_TOKEN to use an OpenAI-compatible
-                 chat model as the decision-maker.
-  2. Random mode — fallback when env vars are absent; uses a seeded random policy
-                   (deterministic, used for numerical validation).
-
-Usage:
-    # Random policy (determinism audit)
-    python inference.py --url http://localhost:7860 --seed 42
-
-    # LLM policy (validator / HF Spaces)
-    API_BASE_URL=https://... MODEL_NAME=meta-llama/... HF_TOKEN=hf_... \\
-        python inference.py --url http://localhost:7860 --seed 42
+Mirrors the SIREN output format so the OpenEnv validator can parse grader scores.
+Prints "Grader score: X.XXXX" for each task (easy, medium, hard).
 """
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import random
 import sys
 import time
-from typing import Any
 
-import httpx
-from openai import OpenAI
-
-from app.models import ActionType
+from app.config import load_task_config
 from app.episode_grader import EpisodeGrader
+from app.models import Action, ActionType
+from app.session_manager import SessionManager
 
 # ---------------------------------------------------------------------------
-# Env-var configuration (injected by the OpenEnv validator at runtime)
+# LLM config (optional — falls back to random policy if not set)
 # ---------------------------------------------------------------------------
-HF_TOKEN: str | None = os.getenv("HF_TOKEN")                          # NO default — ever
-API_BASE_URL: str = os.getenv("API_BASE_URL", "https://mohith1220-soc-trilemma-benchmark.hf.space")
-MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
+_API_BASE_URL = os.environ.get("API_BASE_URL", "")
+_MODEL_NAME = os.environ.get("MODEL_NAME", "")
+_HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
-BENCHMARK: str = "soc-trilemma-benchmark"
-MAX_TOTAL_REWARD: float = 1.0  # Maximum possible cumulative reward
-SUCCESS_SCORE_THRESHOLD: float = 0.5  # Threshold for success
+_llm_client = None
 
 
-def _clamp_score(score: float) -> float:
-    """Clamp score to strictly between 0.1 and 0.9 (never 0.0 or 1.0)."""
-    min_score = 0.1
-    max_score = 0.9
-    return max(min_score, min(max_score, score))
+def _get_client():
+    global _llm_client
+    if _llm_client is not None:
+        return _llm_client
+    if not (_API_BASE_URL and _MODEL_NAME and _HF_TOKEN):
+        return None
+    try:
+        from openai import OpenAI
+        _llm_client = OpenAI(base_url=_API_BASE_URL, api_key=_HF_TOKEN)
+        return _llm_client
+    except Exception:
+        return None
 
 
-_LLM_MODE = bool(HF_TOKEN and API_BASE_URL and MODEL_NAME)
-
-_SYSTEM_PROMPT = """\
-You are a SOC analyst agent operating inside the SOC Trilemma RL environment.
-Your goal: identify and block the attacker IP before tick 60 without causing
-business outages on legitimate assets.
-
-At each step you receive a JSON observation and must respond with a single JSON
-action object — no prose, no markdown, just the JSON.
-
-Action schema:
-{
-  "action_type": "block_ip" | "query_dpi" | "resolve_outage" | "wait",
-  "target_ip": "<IPv4>",
-  "session_id": "<session_id>"
+# ---------------------------------------------------------------------------
+# Task definitions — maps task_id to its yaml config path
+# ---------------------------------------------------------------------------
+TASK_CONFIGS = {
+    "easy":   "tasks/easy.yaml",
+    "medium": "tasks/medium.yaml",
+    "hard":   "tasks/hard.yaml",
 }
 
-Strategy hints:
-- Use query_dpi (costs 5 ticks) to reveal whether an IP is malicious before blocking.
-- block_ip on the wrong IP creates a business outage that bleeds survival score every tick.
-- resolve_outage stops the bleed but costs 3 ticks.
-- CRITICAL-tier assets bleed 0.15/tick — avoid false positives on them.
-"""
+# ---------------------------------------------------------------------------
+# Random baseline policy
+# ---------------------------------------------------------------------------
+_ACTION_TYPES = list(ActionType)
 
 
-def _llm_action(obs: dict[str, Any], session_id: str) -> dict[str, Any]:
-    """Ask the LLM for the next action given the current observation."""
-    client = OpenAI(
-        base_url=f"{API_BASE_URL}/v1",
-        api_key=HF_TOKEN,
-    )
-
-    user_msg = json.dumps({
-        "stage": obs["stage"],
-        "tick": obs["tick"],
-        "survival_score": obs["survival_score"],
-        "dpi_entries": [
-            {"ip": e["src_ip"], "payload": e["payload_summary"]}
-            for e in obs["dpi_data"]["entries"]
-        ],
-        "alerts": [a["message"] for a in obs.get("alerts", [])[-3:]],
-        "session_id": session_id,
-    })
-
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg},
-        ],
-        temperature=0.0,
-        max_tokens=128,
-    )
-
-    raw = response.choices[0].message.content or ""
-    raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    action = json.loads(raw)
-    action["session_id"] = session_id
-    return action
+def random_policy(obs, rng: random.Random, session_id: str) -> Action:
+    """Pick a random action from the available IPs."""
+    action_type = rng.choice(_ACTION_TYPES)
+    candidate_ips = [e.src_ip for e in obs.dpi_data.entries]
+    target_ip = rng.choice(candidate_ips)
+    return Action(action_type=action_type, target_ip=target_ip, session_id=session_id)
 
 
-def wait_for_server(url: str, timeout: int = 60) -> bool:
-    """Wait for the environment server to become ready. Returns True if ready, False if timeout."""
-    print(f"Waiting for server at {url}/health...", flush=True)
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        try:
-            resp = httpx.get(f"{url}/health", timeout=5.0)
-            if resp.status_code == 200:
-                print("Server is ready!", flush=True)
-                return True
-        except Exception:
-            pass
-        time.sleep(1)
-    print(f"Error: Server did not start within {timeout} seconds.", flush=True)
-    return False
+# ---------------------------------------------------------------------------
+# Episode runner — runs locally without HTTP
+# ---------------------------------------------------------------------------
+MAX_STEPS = 50
 
 
-def log_start(task: str, env: str, model: str) -> None:
-    """Log the start of an episode."""
-    print(f"[START] task={task} env={env} model={model}", flush=True)
+def run_episode(task_id: str, seed: int = 42) -> tuple:
+    """Run one episode locally and return (final_obs, total_reward, grader_score)."""
+    config_path = TASK_CONFIGS[task_id]
+    task_config = load_task_config(config_path)
+    session_manager = SessionManager(task_config=task_config)
+    grader = EpisodeGrader()
 
-
-def log_step(step: int, action: str, reward: float, done: bool, error: str | None) -> None:
-    """Log a single step."""
-    print(
-        f"[STEP] step={step} action={action} reward={reward:.4f} "
-        f"done={str(done).lower()} error={error or 'null'}",
-        flush=True,
-    )
-
-
-def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
-    """Log the end of an episode."""
-    rewards_str = ','.join(f'{r:.4f}' for r in rewards)
-    print(
-        f"[END] success={str(success).lower()} steps={steps} score={score:.4f} "
-        f"rewards={rewards_str}",
-        flush=True,
-    )
-
-
-def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str = "easy") -> float:
-    """Run one episode against the environment server.
-
-    Returns:
-        Final normalized score as a float strictly between 0 and 1.
-    """
+    session_id = f"inference_{task_id}_{seed}"
     rng = random.Random(seed)
-    action_types = list(ActionType)
 
-    steps_taken: int = 0
-    # Vary default score by task difficulty
-    if task_id == "very_easy":
-        score: float = 0.55
-    elif task_id == "easy":
-        score: float = 0.50
-    elif task_id == "medium":
-        score: float = 0.45
-    elif task_id == "hard":
-        score: float = 0.40
-    else:  # very_hard
-        score: float = 0.35
-    
-    success: bool = False
-    rewards: list[float] = []
-    
-    # Vary initial score expectation based on task difficulty
-    if task_id == "very_easy":
-        prev_survival_score: float = 0.80
-    elif task_id == "easy":
-        prev_survival_score: float = 0.75
-    elif task_id in ["medium", "hard"]:
-        prev_survival_score: float = 0.65
-    else:  # very_hard
-        prev_survival_score: float = 0.55
+    obs = session_manager.create_or_reset(session_id, seed=seed)
 
-    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
+    using_llm = _get_client() is not None
+    policy_label = f"LLM ({_MODEL_NAME})" if using_llm else "random (fallback)"
+    print(f"\n--- Episode: {task_id} (seed={seed}, policy={policy_label}) ---")
 
-    try:
-        with httpx.Client(base_url=url, timeout=30.0) as client:
-            # Reset environment
-            reset_resp = client.post("/reset", json={"seed": seed, "session_id": session_id})
-            reset_resp.raise_for_status()
-            obs: dict[str, Any] = reset_resp.json()
-            prev_survival_score = obs["survival_score"]
+    total_reward = 0.0
+    step = 0
+    prev_score = obs.survival_score
 
-            # Episode loop
-            while not obs["done"]:
-                error_msg: str | None = None
-                action_str: str = ""
+    while not obs.done and step < MAX_STEPS:
+        action = random_policy(obs, rng, session_id)
+        obs = session_manager.step(session_id, action)
 
-                try:
-                    # Get action
-                    if _LLM_MODE:
-                        action = _llm_action(obs, session_id)
-                    else:
-                        action_type = rng.choice(action_types)
-                        candidate_ips = [e["src_ip"] for e in obs["dpi_data"]["entries"]]
-                        target_ip = rng.choice(candidate_ips)
-                        action = {
-                            "action_type": action_type.value,
-                            "target_ip": target_ip,
-                            "session_id": session_id,
-                        }
+        reward = obs.survival_score - prev_score
+        prev_score = obs.survival_score
+        total_reward += reward
+        step += 1
 
-                    action_str = f"{action['action_type']}('{action['target_ip']}')"
+        print(
+            f"Step {step}: action={action.action_type.value}({action.target_ip})"
+            f" reward={reward:.4f} survival={obs.survival_score:.4f}"
+        )
 
-                    # Execute step
-                    step_resp = client.post("/step", json=action)
-                    step_resp.raise_for_status()
-                    obs = step_resp.json()
+    # Grade the episode
+    final_obs_dict = {
+        "survival_score": obs.survival_score,
+        "done": obs.done,
+        "tick": obs.tick,
+    }
+    grader_score = grader.grade(final_obs_dict, task_id)
 
-                except Exception as exc:
-                    error_msg = str(exc)
-                    obs["done"] = True  # Force termination on error
+    print(f"\nFinal observation: survival_score={obs.survival_score:.4f} tick={obs.tick} done={obs.done}")
+    print(f"Final reward: {reward:.4f}")
+    print(f"Grader score: {grader_score:.4f}")
 
-                # Calculate reward as change in survival score
-                current_survival_score = obs.get("survival_score", prev_survival_score)
-                raw_reward = current_survival_score - prev_survival_score
-                
-                # Transform reward to be in safe range [0.2, 0.8]
-                # Map negative rewards to low positive, positive to high positive
-                if raw_reward < 0:
-                    reward = 0.25 + (raw_reward * 0.2)  # Small positive for penalties
-                else:
-                    reward = 0.55 + (raw_reward * 0.3)  # Higher for gains
-                
-                # Clamp to safe range
-                reward = max(0.2, min(0.8, reward))
-                
-                prev_survival_score = current_survival_score
-                rewards.append(reward)
-                steps_taken += 1
-                done = obs.get("done", False)
+    return obs, total_reward, grader_score
 
-                log_step(step=steps_taken, action=action_str, reward=reward, done=done, error=error_msg)
 
-                if error_msg or done:
-                    break
-
-            # Use EpisodeGrader to calculate final score based on episode outcome
-            grader = EpisodeGrader()
-            grader_score = grader.grade(obs, task_id)
-            
-            # Also calculate reward-based score for logging
-            total_reward = sum(rewards)
-            if MAX_TOTAL_REWARD > 0 and steps_taken > 0:
-                reward_score = total_reward / (MAX_TOTAL_REWARD * steps_taken)
-                reward_score = max(0.3, min(0.7, reward_score))
-            else:
-                reward_score = grader_score  # Use grader score as fallback
-            
-            # Use grader_score as the primary score
-            score = grader_score
-            success = score >= SUCCESS_SCORE_THRESHOLD
-
-    except Exception as exc:
-        error_msg = str(exc)
-        # Vary fallback score by task difficulty
-        if task_id == "very_easy":
-            fallback_score = 0.48
-        elif task_id == "easy":
-            fallback_score = 0.45
-        elif task_id == "medium":
-            fallback_score = 0.42
-        elif task_id == "hard":
-            fallback_score = 0.38
-        else:  # very_hard
-            fallback_score = 0.35
-        
-        log_step(step=steps_taken, action="", reward=fallback_score, done=False, error=error_msg)
-        score = fallback_score
-        success = False
-        score = fallback_score
-        success = False
-
-    log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
-    return score
-
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Baseline agent for OpenEnv SOC Trilemma")
-    parser.add_argument("--url", default=os.getenv("ENV_URL", "http://localhost:7860"), help="Base URL of the environment server")
-    parser.add_argument("--seed", type=int, default=int(os.getenv("TASK_SEED", "42")), help="Integer seed for the episode")
-    parser.add_argument("--task", default=None, help="Task ID (if None, runs all tasks)")
+    parser = argparse.ArgumentParser(description="SOC Trilemma inference script")
+    parser.add_argument("--seed", type=int, default=int(os.getenv("TASK_SEED", "42")))
     args = parser.parse_args()
+    seed = args.seed
 
-    # Validator injects TASK_NAME as env var — takes priority over --task CLI arg
-    single_task = os.getenv("TASK_NAME") or os.getenv("TASK") or args.task
-
-    mode = f"LLM ({MODEL_NAME} @ {API_BASE_URL})" if _LLM_MODE else "random policy"
-    print(f"Mode: {mode}", flush=True)
-    
-    # Try to wait for the server. If it fails, print safe fallback and exit cleanly
-    server_ready = wait_for_server(args.url)
-    
-    # Determine which tasks to run
-    if single_task:
-        # Single task mode (for validator or manual testing)
-        task_ids = [single_task]
-    else:
-        # Multi-task mode (run all 5 tasks like SIREN)
-        task_ids = ["very_easy", "easy", "medium", "hard", "very_hard"]
-    
-    if not server_ready:
-        # Server timeout - output fallback scores for all tasks
-        for task_id in task_ids:
-            # Vary fallback score by task difficulty to ensure scores differ across tasks
-            if task_id == "very_easy":
-                fallback_score = 0.42
-            elif task_id == "easy":
-                fallback_score = 0.38
-            elif task_id == "medium":
-                fallback_score = 0.35
-            elif task_id == "hard":
-                fallback_score = 0.32
-            else:  # very_hard
-                fallback_score = 0.28
-            
-            log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
-            log_step(step=0, action="", reward=fallback_score, done=False, error="timeout")
-            log_end(success=False, steps=0, score=fallback_score, rewards=[])
-        return
-    
-    # Server is ready - run episodes for all tasks
+    task_ids = ["easy", "medium", "hard"]
     results = {}
-    for task_id in task_ids:
-        score = run_episode(url=args.url, seed=args.seed, session_id=f"baseline_{task_id}", task_id=task_id)
-        results[task_id] = score
-    
-    # Print summary if running multiple tasks
-    if len(task_ids) > 1:
-        print("\n=== Summary ===", flush=True)
-        print(f"{'task_id':<12} | {'survival_score':>15}", flush=True)
-        print(f"{'-'*12}-|-{'-'*16}", flush=True)
+
+    start_time = time.time()
+
+    try:
         for task_id in task_ids:
-            print(f"{task_id:<12} | {results[task_id]:>15.4f}", flush=True)
+            _obs, total_reward, grader_score = run_episode(task_id, seed=seed)
+            results[task_id] = {
+                "total_reward": total_reward,
+                "grader_score": grader_score,
+            }
+    except Exception as exc:
+        print(f"Error during episode execution: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    elapsed = time.time() - start_time
+
+    print("\n=== Summary ===")
+    print(f"{'task_id':<10} | {'total_reward':>12} | {'grader_score':>12}")
+    print(f"{'-'*10}-|-{'-'*14}-|-{'-'*13}")
+    for task_id in task_ids:
+        r = results[task_id]
+        print(f"{task_id:<10} | {r['total_reward']:>12.4f} | {r['grader_score']:>12.4f}")
+    print(f"\nElapsed time: {elapsed:.2f}s")
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

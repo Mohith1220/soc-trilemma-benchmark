@@ -1,5 +1,9 @@
+spec_version: 1
 name: soc-trilemma-benchmark
-entry_point: app.app:app
+type: space
+runtime: fastapi
+app: app.app:app
+port: 7860
 
 description: >
   A 3-stage Cyber Kill Chain RL environment where an agent acts as a SOC analyst
@@ -7,13 +11,31 @@ description: >
   outage penalties, and MCP tool discovery.
 
 tasks:
-  - id: very_easy
-    path: tasks/very_easy.yaml
   - id: easy
+    description: "Easy difficulty — 2 decoys, low SLA penalty, 100 max steps"
     path: tasks/easy.yaml
+    pass_criteria:
+      attacker_blocked: true
+      min_survival_score: 0.3
+
   - id: medium
+    description: "Medium difficulty — 4 decoys, moderate SLA penalty, 85 max steps"
     path: tasks/medium.yaml
+    pass_criteria:
+      attacker_blocked: true
+      min_survival_score: 0.25
+
   - id: hard
+    description: "Hard difficulty — 4 decoys, high SLA penalty, 75 max steps"
     path: tasks/hard.yaml
-  - id: very_hard
-    path: tasks/very_hard.yaml
+    pass_criteria:
+      attacker_blocked: true
+      min_survival_score: 0.2
+
+server:
+  port: 7860
+  endpoints:
+    - GET /health
+    - POST /reset
+    - POST /step
+    - GET /state
