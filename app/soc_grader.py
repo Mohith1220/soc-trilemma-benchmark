@@ -12,11 +12,11 @@ _TIER_PENALTY: dict[str, float] = {
 
 def _clamp(score: float) -> float:
     """
-    Clamp score strictly inside (0.1, 0.9) range.
-    Ensures scores are never exactly 0.0 or 1.0.
+    Clamp score strictly inside (0.11, 0.89) range.
+    Ensures scores are never exactly 0.0, 1.0, or at risky boundaries.
     """
-    min_score = 0.1
-    max_score = 0.9
+    min_score = 0.11
+    max_score = 0.89
     return max(min_score, min(max_score, score))
 
 

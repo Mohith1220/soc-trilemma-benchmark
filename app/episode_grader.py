@@ -7,12 +7,12 @@ from __future__ import annotations
 
 
 def _clamp(score: float) -> float:
-    """Clamp to strictly (0.1, 0.9) — never 0.0 or 1.0."""
-    return max(0.1, min(0.9, score))
+    """Clamp to strictly (0.11, 0.89) — well within (0, 1), never at boundaries."""
+    return max(0.11, min(0.89, score))
 
 
 class EpisodeGrader:
-    """Grades a completed episode and returns a score strictly in (0.1, 0.9)."""
+    """Grades a completed episode and returns a score strictly in (0.11, 0.89)."""
 
     def grade(self, final_obs: dict, task_id: str) -> float:
         """
@@ -23,7 +23,7 @@ class EpisodeGrader:
             task_id: "easy", "medium", or "hard"
 
         Returns:
-            Float strictly between 0.1 and 0.9
+            Float strictly between 0.11 and 0.89
         """
         survival = final_obs.get("survival_score", 0.5)
         done = final_obs.get("done", False)
