@@ -160,7 +160,18 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
     action_types = list(ActionType)
 
     steps_taken: int = 0
-    score: float = 0.5  # Default safe score in middle of range
+    # Vary default score by task difficulty
+    if task_id == "very_easy":
+        score: float = 0.55
+    elif task_id == "easy":
+        score: float = 0.50
+    elif task_id == "medium":
+        score: float = 0.45
+    elif task_id == "hard":
+        score: float = 0.40
+    else:  # very_hard
+        score: float = 0.35
+    
     success: bool = False
     rewards: list[float] = []
     
@@ -245,7 +256,17 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
                 # Ensure score is in safe range [0.3, 0.7]
                 score = max(0.3, min(0.7, score))
             else:
-                score = 0.5  # Safe middle value
+                # Vary fallback score by task difficulty when no steps taken
+                if task_id == "very_easy":
+                    score = 0.55
+                elif task_id == "easy":
+                    score = 0.50
+                elif task_id == "medium":
+                    score = 0.45
+                elif task_id == "hard":
+                    score = 0.40
+                else:  # very_hard
+                    score = 0.35
             
             # Final clamp to ensure within bounds
             score = _clamp_score(score)
@@ -253,8 +274,20 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
 
     except Exception as exc:
         error_msg = str(exc)
-        log_step(step=steps_taken, action="", reward=0.45, done=False, error=error_msg)
-        score = 0.45  # Safe fallback score
+        # Vary fallback score by task difficulty
+        if task_id == "very_easy":
+            fallback_score = 0.48
+        elif task_id == "easy":
+            fallback_score = 0.45
+        elif task_id == "medium":
+            fallback_score = 0.42
+        elif task_id == "hard":
+            fallback_score = 0.38
+        else:  # very_hard
+            fallback_score = 0.35
+        
+        log_step(step=steps_taken, action="", reward=fallback_score, done=False, error=error_msg)
+        score = fallback_score
         success = False
 
     log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
@@ -277,9 +310,21 @@ def main() -> None:
     # Try to wait for the server. If it fails, print safe fallback and exit cleanly
     server_ready = wait_for_server(args.url)
     if not server_ready:
+        # Vary fallback score by task difficulty to ensure scores differ across tasks
+        if task_id == "very_easy":
+            fallback_score = 0.42
+        elif task_id == "easy":
+            fallback_score = 0.38
+        elif task_id == "medium":
+            fallback_score = 0.35
+        elif task_id == "hard":
+            fallback_score = 0.32
+        else:  # very_hard
+            fallback_score = 0.28
+        
         log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
-        log_step(step=0, action="", reward=0.35, done=False, error="timeout")
-        log_end(success=False, steps=0, score=0.35, rewards=[])
+        log_step(step=0, action="", reward=fallback_score, done=False, error="timeout")
+        log_end(success=False, steps=0, score=fallback_score, rewards=[])
         return
     
     # If ready, run the actual episode
