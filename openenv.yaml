@@ -17,8 +17,3 @@ tasks:
     path: tasks/hard.yaml
   - id: very_hard
     path: tasks/very_hard.yaml
-
-scoring:
-  deterministic: true
-  metric: survival_score
-  range: [0.0, 1.0]
