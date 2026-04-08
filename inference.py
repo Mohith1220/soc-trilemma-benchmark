@@ -28,6 +28,7 @@ import httpx
 from openai import OpenAI
 
 from app.models import ActionType
+from app.episode_grader import EpisodeGrader
 
 # ---------------------------------------------------------------------------
 # Env-var configuration (injected by the OpenEnv validator at runtime)
@@ -249,27 +250,20 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
                 if error_msg or done:
                     break
 
-            # Calculate final score as normalized sum of rewards
+            # Use EpisodeGrader to calculate final score based on episode outcome
+            grader = EpisodeGrader()
+            grader_score = grader.grade(obs, task_id)
+            
+            # Also calculate reward-based score for logging
             total_reward = sum(rewards)
             if MAX_TOTAL_REWARD > 0 and steps_taken > 0:
-                score = total_reward / (MAX_TOTAL_REWARD * steps_taken)
-                # Ensure score is in safe range [0.3, 0.7]
-                score = max(0.3, min(0.7, score))
+                reward_score = total_reward / (MAX_TOTAL_REWARD * steps_taken)
+                reward_score = max(0.3, min(0.7, reward_score))
             else:
-                # Vary fallback score by task difficulty when no steps taken
-                if task_id == "very_easy":
-                    score = 0.55
-                elif task_id == "easy":
-                    score = 0.50
-                elif task_id == "medium":
-                    score = 0.45
-                elif task_id == "hard":
-                    score = 0.40
-                else:  # very_hard
-                    score = 0.35
+                reward_score = grader_score  # Use grader score as fallback
             
-            # Final clamp to ensure within bounds
-            score = _clamp_score(score)
+            # Use grader_score as the primary score
+            score = grader_score
             success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as exc:
@@ -287,6 +281,8 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
             fallback_score = 0.35
         
         log_step(step=steps_taken, action="", reward=fallback_score, done=False, error=error_msg)
+        score = fallback_score
+        success = False
         score = fallback_score
         success = False
 

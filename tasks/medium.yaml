@@ -6,8 +6,3 @@ stage_time_budgets:
   Exfiltration: 15
 sla_penalty_rate: 0.10
 num_decoys: 4
-
-grader:
-  script: inference.py
-  metric: survival_score
-  score_range: [0.0, 1.0]
