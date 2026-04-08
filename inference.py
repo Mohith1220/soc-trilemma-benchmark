@@ -144,7 +144,7 @@ def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> No
     """Log the end of an episode."""
     rewards_str = ','.join(f'{r:.4f}' for r in rewards)
     print(
-        f"[END] success={str(success).lower()} steps={steps} score={score:.4f} "
+        f"[END] success={str(success).lower()} steps={steps} survival_score={score:.4f} "
         f"rewards={rewards_str}",
         flush=True,
     )
