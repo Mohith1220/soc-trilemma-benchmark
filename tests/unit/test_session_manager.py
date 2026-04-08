@@ -46,6 +46,7 @@ def test_reset_produces_clean_observation():
     assert obs.stage == KillChainStage.Recon
     assert obs.alerts == []
     assert obs.done is False
+    # TASK_CONFIG uses easy.yaml with sla_penalty_rate=0.05 → initial score 0.75
     assert obs.survival_score == 0.75
     assert obs.tick == 0
     assert obs.dom != ""
@@ -120,6 +121,7 @@ def test_reset_clears_existing_session():
     obs2 = mgr.create_or_reset("s5", seed=2)
     assert obs2.stage == KillChainStage.Recon
     assert obs2.alerts == []
+    # TASK_CONFIG uses easy.yaml with sla_penalty_rate=0.05 → initial score 0.75
     assert obs2.survival_score == 0.75
     assert obs2.tick == 0
     assert obs2.done is False

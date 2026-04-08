@@ -163,7 +163,16 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
     score: float = 0.5  # Default safe score in middle of range
     success: bool = False
     rewards: list[float] = []
-    prev_survival_score: float = 0.75  # Match grader initial score
+    
+    # Vary initial score expectation based on task difficulty
+    if task_id == "very_easy":
+        prev_survival_score: float = 0.80
+    elif task_id == "easy":
+        prev_survival_score: float = 0.75
+    elif task_id in ["medium", "hard"]:
+        prev_survival_score: float = 0.65
+    else:  # very_hard
+        prev_survival_score: float = 0.55
 
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 

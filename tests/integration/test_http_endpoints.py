@@ -25,6 +25,7 @@ def test_reset_returns_initial_observation(client: TestClient) -> None:
     assert data["stage"] == "Recon"
     assert data["alerts"] == []
     assert data["done"] is False
+    # App uses easy.yaml by default with sla_penalty_rate=0.05 → initial score 0.75
     assert data["survival_score"] == 0.75
     assert data["tick"] == 0
     assert data["dom"] != ""
@@ -34,6 +35,7 @@ def test_reset_missing_seed_uses_default(client: TestClient) -> None:
     # seed is Optional with default=42, so omitting it is valid and returns 200
     resp = client.post("/reset", json={"session_id": "no_seed"})
     assert resp.status_code == 200
+    # App uses easy.yaml by default with sla_penalty_rate=0.05 → initial score 0.75
     assert resp.json()["survival_score"] == 0.75
 
 

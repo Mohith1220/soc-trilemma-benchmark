@@ -33,7 +33,16 @@ class SOCGrader:
     ) -> None:
         self.sla_penalty_rate = sla_penalty_rate
         self.ip_tiers = ip_tiers or {}
-        self.survival_score = 0.75  # Start at mid-high range, well away from boundaries
+        # Vary initial score based on penalty rate (task difficulty)
+        # Lower penalty = easier task = higher initial score
+        if sla_penalty_rate <= 0.03:
+            self.survival_score = 0.80  # very_easy
+        elif sla_penalty_rate <= 0.05:
+            self.survival_score = 0.75  # easy
+        elif sla_penalty_rate <= 0.10:
+            self.survival_score = 0.65  # medium/hard
+        else:
+            self.survival_score = 0.55  # very_hard
         self.active_outages = []
 
     def _penalty_for(self, target_ip: str) -> float:

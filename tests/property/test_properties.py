@@ -450,6 +450,7 @@ def test_reset_produces_clean_initial_observation(seed: int):
     assert obs.stage == KillChainStage.Recon
     assert obs.alerts == []
     assert obs.done is False
+    # _TASK_CONFIG uses easy.yaml with sla_penalty_rate=0.05 → initial score 0.75
     assert obs.survival_score == 0.75
 
 

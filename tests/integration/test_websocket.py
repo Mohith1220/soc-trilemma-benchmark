@@ -35,6 +35,7 @@ def test_ws_reset_returns_initial_observation(client: TestClient) -> None:
 
     assert data["stage"] == "Recon"
     assert data["done"] is False
+    # App uses easy.yaml by default with sla_penalty_rate=0.05 → initial score 0.75
     assert data["survival_score"] == 0.75
     assert data["tick"] == 0
     assert data["alerts"] == []

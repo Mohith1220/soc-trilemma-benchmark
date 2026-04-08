@@ -37,22 +37,26 @@ def test_score_does_not_exceed_one_on_correct_block():
 
 def test_simultaneous_outages_accumulate():
     grader = SOCGrader(sla_penalty_rate=0.1)
-    grader.survival_score = 0.75
+    # penalty_rate=0.1 → initial score is 0.65 (medium/hard)
+    initial_score = grader.survival_score
+    assert initial_score == 0.65
     # Create two outages
     grader.grade_action(_action(ActionType.BlockIP, DECOY_A), ATTACKER, 0)
     grader.grade_action(_action(ActionType.BlockIP, DECOY_B), ATTACKER, 0)
     assert len(grader.active_outages) == 2
 
-    # Each wrong block applies -0.12 shock: 0.75 - 0.12 - 0.12 = 0.51
+    # Each wrong block applies -0.12 shock: 0.65 - 0.12 - 0.12 = 0.41
     # Then each outage contributes 0.1 per tick; tick_cost=1 → total penalty = 0.2
-    # Final: 0.51 - 0.2 = 0.31
+    # Final: 0.41 - 0.2 = 0.21
     grader.apply_tick_penalties(tick_cost=1)
-    assert abs(grader.survival_score - 0.31) < 1e-2
+    assert abs(grader.survival_score - 0.21) < 1e-2
 
 
 def test_simultaneous_outages_each_contribute_independently():
     grader = SOCGrader(sla_penalty_rate=0.05)
-    grader.survival_score = 0.75
+    # penalty_rate=0.05 → initial score is 0.75 (easy)
+    initial_score = grader.survival_score
+    assert initial_score == 0.75
     grader.grade_action(_action(ActionType.BlockIP, DECOY_A), ATTACKER, 0)
     grader.grade_action(_action(ActionType.BlockIP, DECOY_B), ATTACKER, 0)
     # Each wrong block applies -0.12 shock: 0.75 - 0.12 - 0.12 = 0.51
