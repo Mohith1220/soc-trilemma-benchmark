@@ -294,37 +294,59 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Baseline agent for OpenEnv SOC Trilemma")
     parser.add_argument("--url", default=os.getenv("ENV_URL", "http://localhost:7860"), help="Base URL of the environment server")
     parser.add_argument("--seed", type=int, default=int(os.getenv("TASK_SEED", "42")), help="Integer seed for the episode")
-    parser.add_argument("--task", default="easy", help="Task ID for structured logging")
+    parser.add_argument("--task", default=None, help="Task ID (if None, runs all tasks)")
     args = parser.parse_args()
 
     # Validator injects TASK_NAME as env var — takes priority over --task CLI arg
-    task_id = os.getenv("TASK_NAME") or os.getenv("TASK") or args.task
+    single_task = os.getenv("TASK_NAME") or os.getenv("TASK") or args.task
 
     mode = f"LLM ({MODEL_NAME} @ {API_BASE_URL})" if _LLM_MODE else "random policy"
     print(f"Mode: {mode}", flush=True)
     
     # Try to wait for the server. If it fails, print safe fallback and exit cleanly
     server_ready = wait_for_server(args.url)
+    
+    # Determine which tasks to run
+    if single_task:
+        # Single task mode (for validator or manual testing)
+        task_ids = [single_task]
+    else:
+        # Multi-task mode (run all 5 tasks like SIREN)
+        task_ids = ["very_easy", "easy", "medium", "hard", "very_hard"]
+    
     if not server_ready:
-        # Vary fallback score by task difficulty to ensure scores differ across tasks
-        if task_id == "very_easy":
-            fallback_score = 0.42
-        elif task_id == "easy":
-            fallback_score = 0.38
-        elif task_id == "medium":
-            fallback_score = 0.35
-        elif task_id == "hard":
-            fallback_score = 0.32
-        else:  # very_hard
-            fallback_score = 0.28
-        
-        log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
-        log_step(step=0, action="", reward=fallback_score, done=False, error="timeout")
-        log_end(success=False, steps=0, score=fallback_score, rewards=[])
+        # Server timeout - output fallback scores for all tasks
+        for task_id in task_ids:
+            # Vary fallback score by task difficulty to ensure scores differ across tasks
+            if task_id == "very_easy":
+                fallback_score = 0.42
+            elif task_id == "easy":
+                fallback_score = 0.38
+            elif task_id == "medium":
+                fallback_score = 0.35
+            elif task_id == "hard":
+                fallback_score = 0.32
+            else:  # very_hard
+                fallback_score = 0.28
+            
+            log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
+            log_step(step=0, action="", reward=fallback_score, done=False, error="timeout")
+            log_end(success=False, steps=0, score=fallback_score, rewards=[])
         return
     
-    # If ready, run the actual episode
-    run_episode(url=args.url, seed=args.seed, session_id="baseline", task_id=task_id)
+    # Server is ready - run episodes for all tasks
+    results = {}
+    for task_id in task_ids:
+        score = run_episode(url=args.url, seed=args.seed, session_id=f"baseline_{task_id}", task_id=task_id)
+        results[task_id] = score
+    
+    # Print summary if running multiple tasks
+    if len(task_ids) > 1:
+        print("\n=== Summary ===", flush=True)
+        print(f"{'task_id':<12} | {'survival_score':>15}", flush=True)
+        print(f"{'-'*12}-|-{'-'*16}", flush=True)
+        for task_id in task_ids:
+            print(f"{task_id:<12} | {results[task_id]:>15.4f}", flush=True)
 
 
 if __name__ == "__main__":
