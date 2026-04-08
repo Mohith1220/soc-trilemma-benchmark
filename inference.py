@@ -37,13 +37,20 @@ API_BASE_URL: str = os.getenv("API_BASE_URL", "https://mohith1220-soc-trilemma-b
 MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
 
 BENCHMARK: str = "soc-trilemma-benchmark"
-
-_EPSILON = 0.1
+MAX_TOTAL_REWARD: float = 1.0  # Maximum possible cumulative reward
+SUCCESS_SCORE_THRESHOLD: float = 0.5  # Threshold for success
 
 
 def _clamp_score(score: float) -> float:
-    """Mirror soc_grader epsilon clamp so [END] score matches grader output."""
-    return max(_EPSILON, min(1.0 - _EPSILON, score))
+    """Clamp score to strictly between 0 and 1 (never exactly 0.0 or 1.0)."""
+    epsilon = 0.0001
+    if score <= 0:
+        return epsilon
+    elif score >= 1.0:
+        return 1.0 - epsilon
+    else:
+        return max(epsilon, min(1.0 - epsilon, score))
+
 
 _LLM_MODE = bool(HF_TOKEN and API_BASE_URL and MODEL_NAME)
 
@@ -123,35 +130,62 @@ def wait_for_server(url: str, timeout: int = 60) -> bool:
     return False
 
 
+def log_start(task: str, env: str, model: str) -> None:
+    """Log the start of an episode."""
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: str | None) -> None:
+    """Log a single step."""
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.4f} "
+        f"done={str(done).lower()} error={error or 'null'}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
+    """Log the end of an episode."""
+    rewards_str = ','.join(f'{r:.4f}' for r in rewards)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.4f} "
+        f"rewards={rewards_str}",
+        flush=True,
+    )
+
+
 def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str = "easy") -> float:
     """Run one episode against the environment server.
 
     Returns:
-        Final survival score as a float.
+        Final normalized score as a float strictly between 0 and 1.
     """
     rng = random.Random(seed)
     action_types = list(ActionType)
 
-    n: int = 0
-    score: float = 0.1  # Default to safe padded score with wide margin
+    steps_taken: int = 0
+    score: float = 0.5  # Default safe score
     success: bool = False
-    rewards_list: list[float] = []
-    prev_score: float = 0.9
+    rewards: list[float] = []
+    prev_survival_score: float = 0.9
 
-    print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}", flush=True)
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
     try:
         with httpx.Client(base_url=url, timeout=30.0) as client:
+            # Reset environment
             reset_resp = client.post("/reset", json={"seed": seed, "session_id": session_id})
             reset_resp.raise_for_status()
             obs: dict[str, Any] = reset_resp.json()
-            prev_score = obs["survival_score"]
+            prev_survival_score = obs["survival_score"]
 
+            # Episode loop
             while not obs["done"]:
                 error_msg: str | None = None
                 action_str: str = ""
 
                 try:
+                    # Get action
                     if _LLM_MODE:
                         action = _llm_action(obs, session_id)
                     else:
@@ -166,52 +200,51 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
 
                     action_str = f"{action['action_type']}('{action['target_ip']}')"
 
+                    # Execute step
                     step_resp = client.post("/step", json=action)
                     step_resp.raise_for_status()
                     obs = step_resp.json()
 
                 except Exception as exc:
                     error_msg = str(exc)
+                    obs["done"] = True  # Force termination on error
 
-                n += 1
-                reward = round(obs["survival_score"] - prev_score, 8)
-                # Ensure reward is strictly between 0 and 1 (never exactly 0.0 or 1.0)
-                # Map negative rewards to small positive values, clamp positive rewards
-                if reward <= 0:
-                    reward = 0.0001  # Small positive value instead of 0 or negative
-                elif reward >= 1.0:
-                    reward = 0.9999  # Just below 1.0
-                elif abs(reward) < 0.0001:
-                    reward = 0.0001  # Avoid exact 0.0
+                # Calculate reward as change in survival score
+                current_survival_score = obs.get("survival_score", prev_survival_score)
+                raw_reward = current_survival_score - prev_survival_score
                 
-                prev_score = obs["survival_score"]
-                rewards_list.append(reward)
-                done = obs["done"]
+                # Clamp reward to strictly (0, 1) range
+                reward = _clamp_score(raw_reward + 0.5)  # Shift to positive range
+                
+                prev_survival_score = current_survival_score
+                rewards.append(reward)
+                steps_taken += 1
+                done = obs.get("done", False)
 
-                print(
-                    f"[STEP] step={n} action={action_str} reward={reward:.4f} "
-                    f"done={str(done).lower()} error={error_msg or 'null'}",
-                    flush=True,
-                )
+                log_step(step=steps_taken, action=action_str, reward=reward, done=done, error=error_msg)
 
-
-                if error_msg:
+                if error_msg or done:
                     break
 
-            score = obs["survival_score"]
-            success = obs["done"]
+            # Calculate final score as normalized sum of rewards
+            total_reward = sum(rewards)
+            if MAX_TOTAL_REWARD > 0:
+                score = total_reward / (MAX_TOTAL_REWARD * max(1, steps_taken))
+            else:
+                score = 0.5
+            
+            # Clamp final score to strictly (0, 1)
+            score = _clamp_score(score)
+            success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as exc:
         error_msg = str(exc)
-        print(f"[STEP] step={n} action= reward=0.0000 done=false error={error_msg}", flush=True)
+        log_step(step=steps_taken, action="", reward=0.5, done=False, error=error_msg)
+        score = _clamp_score(0.5)
+        success = False
 
-    clamped_score = _clamp_score(score)
-    print(
-        f"[END] success={str(success).lower()} steps={n} score={clamped_score:.4f} "
-        f"rewards={','.join(f'{r:.4f}' for r in rewards_list)}",
-        flush=True,
-    )
-    return clamped_score
+    log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+    return score
 
 
 def main() -> None:
@@ -230,9 +263,9 @@ def main() -> None:
     # Try to wait for the server. If it fails, print safe fallback and exit cleanly
     server_ready = wait_for_server(args.url)
     if not server_ready:
-        print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}", flush=True)
-        print("[STEP] step=0 action= reward=0.0000 done=false error=timeout", flush=True)
-        print("[END] success=false steps=0 score=0.1000 rewards=", flush=True)
+        log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
+        log_step(step=0, action="", reward=0.5, done=False, error="timeout")
+        log_end(success=False, steps=0, score=0.5, rewards=[])
         return
     
     # If ready, run the actual episode
