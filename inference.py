@@ -175,9 +175,15 @@ def run_episode(url: str, seed: int, session_id: str = "baseline", task_id: str 
 
                 n += 1
                 reward = round(obs["survival_score"] - prev_score, 8)
-                # Clamp reward to avoid exact 0.0 boundaries
-                if abs(reward) < 0.0001:
-                    reward = 0.0001 if reward >= 0 else -0.0001
+                # Ensure reward is strictly between 0 and 1 (never exactly 0.0 or 1.0)
+                # Map negative rewards to small positive values, clamp positive rewards
+                if reward <= 0:
+                    reward = 0.0001  # Small positive value instead of 0 or negative
+                elif reward >= 1.0:
+                    reward = 0.9999  # Just below 1.0
+                elif abs(reward) < 0.0001:
+                    reward = 0.0001  # Avoid exact 0.0
+                
                 prev_score = obs["survival_score"]
                 rewards_list.append(reward)
                 done = obs["done"]
