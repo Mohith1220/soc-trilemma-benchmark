@@ -1,0 +1,8 @@
+name: very_easy
+max_steps: 120
+stage_time_budgets:
+  Recon: 35
+  Lateral_Movement: 30
+  Exfiltration: 25
+sla_penalty_rate: 0.03
+num_decoys: 1
