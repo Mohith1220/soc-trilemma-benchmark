@@ -1,3 +1,4 @@
+name: expert
 max_steps: 60
 stage_time_budgets:
   Recon: 15

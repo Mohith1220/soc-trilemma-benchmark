@@ -37,3 +37,7 @@ test_output.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Reference projects (do not commit)
+siren-env-main/
+siren-env/
