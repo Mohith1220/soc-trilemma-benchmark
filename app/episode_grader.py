@@ -7,9 +7,9 @@ from __future__ import annotations
 
 
 def _clamp_score(score: float) -> float:
-    """Clamp score to strictly between 0.15 and 0.85 (well within 0.1-0.9 range)."""
-    min_score = 0.15
-    max_score = 0.85
+    """Clamp score to strictly between 0.1 and 0.9 (never 0.0 or 1.0)."""
+    min_score = 0.1
+    max_score = 0.9
     return max(min_score, min(max_score, score))
 
 

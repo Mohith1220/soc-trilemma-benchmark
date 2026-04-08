@@ -9,16 +9,11 @@ description: >
 tasks:
   - id: very_easy
     path: tasks/very_easy.yaml
-    grader: true
   - id: easy
     path: tasks/easy.yaml
-    grader: true
   - id: medium
     path: tasks/medium.yaml
-    grader: true
   - id: hard
     path: tasks/hard.yaml
-    grader: true
   - id: very_hard
     path: tasks/very_hard.yaml
-    grader: true
