@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""SOC Trilemma inference script — runs episodes locally and reports grader scores.
+"""SOC Trilemma inference script.
 
-Mirrors the SIREN output format so the OpenEnv validator can parse grader scores.
-Prints "Grader score: X.XXXX" for each task (easy, medium, hard).
+Emits structured stdout logs in the mandatory format:
+  [START] task=<task_name> env=<benchmark> model=<model_name>
+  [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
+  [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
 """
 from __future__ import annotations
 
@@ -10,7 +12,6 @@ import argparse
 import os
 import random
 import sys
-import time
 
 from app.config import load_task_config
 from app.episode_grader import EpisodeGrader
@@ -18,106 +19,115 @@ from app.models import Action, ActionType
 from app.session_manager import SessionManager
 
 # ---------------------------------------------------------------------------
-# LLM config (optional — falls back to random policy if not set)
+# Config
 # ---------------------------------------------------------------------------
-_API_BASE_URL = os.environ.get("API_BASE_URL", "")
-_MODEL_NAME = os.environ.get("MODEL_NAME", "")
-_HF_TOKEN = os.environ.get("HF_TOKEN", "")
+API_BASE_URL = os.getenv("API_BASE_URL", "")
+MODEL_NAME   = os.getenv("MODEL_NAME", "random-baseline")
+HF_TOKEN     = os.getenv("HF_TOKEN", "")
 
-_llm_client = None
+BENCHMARK = "soc-trilemma"
+MAX_STEPS = 50
 
-
-def _get_client():
-    global _llm_client
-    if _llm_client is not None:
-        return _llm_client
-    if not (_API_BASE_URL and _MODEL_NAME and _HF_TOKEN):
-        return None
-    try:
-        from openai import OpenAI
-        _llm_client = OpenAI(base_url=_API_BASE_URL, api_key=_HF_TOKEN)
-        return _llm_client
-    except Exception:
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Task definitions — maps task_id to its yaml config path
-# ---------------------------------------------------------------------------
 TASK_CONFIGS = {
     "easy":   "tasks/easy.yaml",
     "medium": "tasks/medium.yaml",
     "hard":   "tasks/hard.yaml",
 }
 
-# ---------------------------------------------------------------------------
-# Random baseline policy
-# ---------------------------------------------------------------------------
 _ACTION_TYPES = list(ActionType)
 
+# ---------------------------------------------------------------------------
+# Mandatory log helpers
+# ---------------------------------------------------------------------------
+
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: str | None) -> None:
+    error_str = error if error else "null"
+    done_str  = "true" if done else "false"
+    print(
+        f"[STEP]  step={step} action={action} reward={reward:.2f} "
+        f"done={done_str} error={error_str}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    success_str = "true" if success else "false"
+    print(
+        f"[END]   success={success_str} steps={steps} score={score:.2f} "
+        f"rewards={rewards_str}",
+        flush=True,
+    )
+
+# ---------------------------------------------------------------------------
+# Policy
+# ---------------------------------------------------------------------------
 
 def random_policy(obs, rng: random.Random, session_id: str) -> Action:
-    """Pick a random action from the available IPs."""
     action_type = rng.choice(_ACTION_TYPES)
     candidate_ips = [e.src_ip for e in obs.dpi_data.entries]
     target_ip = rng.choice(candidate_ips)
     return Action(action_type=action_type, target_ip=target_ip, session_id=session_id)
 
-
 # ---------------------------------------------------------------------------
-# Episode runner — runs locally without HTTP
+# Episode runner
 # ---------------------------------------------------------------------------
-MAX_STEPS = 50
 
+def run_episode(task_id: str, seed: int = 42) -> float:
+    """Run one episode, emit [START]/[STEP]/[END] logs, return grader_score."""
+    config_path  = TASK_CONFIGS[task_id]
+    task_config  = load_task_config(config_path)
+    session_mgr  = SessionManager(task_config=task_config)
+    grader       = EpisodeGrader()
+    session_id   = f"inference_{task_id}_{seed}"
+    rng          = random.Random(seed)
 
-def run_episode(task_id: str, seed: int = 42) -> tuple:
-    """Run one episode locally and return (final_obs, total_reward, grader_score)."""
-    config_path = TASK_CONFIGS[task_id]
-    task_config = load_task_config(config_path)
-    session_manager = SessionManager(task_config=task_config)
-    grader = EpisodeGrader()
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
-    session_id = f"inference_{task_id}_{seed}"
-    rng = random.Random(seed)
-
-    obs = session_manager.create_or_reset(session_id, seed=seed)
-
-    using_llm = _get_client() is not None
-    policy_label = f"LLM ({_MODEL_NAME})" if using_llm else "random (fallback)"
-    print(f"\n--- Episode: {task_id} (seed={seed}, policy={policy_label}) ---")
-
-    total_reward = 0.0
-    step = 0
+    obs        = session_mgr.create_or_reset(session_id, seed=seed)
     prev_score = obs.survival_score
+    step       = 0
+    rewards: list[float] = []
+    success    = False
+    score      = 0.0
 
-    while not obs.done and step < MAX_STEPS:
-        action = random_policy(obs, rng, session_id)
-        obs = session_manager.step(session_id, action)
+    try:
+        while not obs.done and step < MAX_STEPS:
+            action  = random_policy(obs, rng, session_id)
+            obs     = session_mgr.step(session_id, action)
 
-        reward = obs.survival_score - prev_score
-        prev_score = obs.survival_score
-        total_reward += reward
-        step += 1
+            reward      = obs.survival_score - prev_score
+            prev_score  = obs.survival_score
+            step       += 1
+            rewards.append(reward)
 
-        print(
-            f"Step {step}: action={action.action_type.value}({action.target_ip})"
-            f" reward={reward:.4f} survival={obs.survival_score:.4f}"
-        )
+            log_step(
+                step=step,
+                action=f"{action.action_type.value}({action.target_ip})",
+                reward=reward,
+                done=obs.done,
+                error=None,
+            )
 
-    # Grade the episode
-    final_obs_dict = {
-        "survival_score": obs.survival_score,
-        "done": obs.done,
-        "tick": obs.tick,
-    }
-    grader_score = grader.grade(final_obs_dict, task_id)
+        final_obs_dict = {
+            "survival_score": obs.survival_score,
+            "done": obs.done,
+            "tick": obs.tick,
+        }
+        score   = grader.grade(final_obs_dict, task_id)
+        success = score > 0.0
 
-    print(f"\nFinal observation: survival_score={obs.survival_score:.4f} tick={obs.tick} done={obs.done}")
-    print(f"Final reward: {reward:.4f}")
-    print(f"Grader score: {grader_score:.4f}")
+    except Exception as exc:
+        log_step(step=step + 1, action="error", reward=0.0, done=True, error=str(exc))
+        score   = 0.11  # minimum valid score — never 0.0
+        success = False
 
-    return obs, total_reward, grader_score
-
+    log_end(success=success, steps=step, score=score, rewards=rewards)
+    return score
 
 # ---------------------------------------------------------------------------
 # Entry point
@@ -129,31 +139,8 @@ def main() -> None:
     args = parser.parse_args()
     seed = args.seed
 
-    task_ids = ["easy", "medium", "hard"]
-    results = {}
-
-    start_time = time.time()
-
-    try:
-        for task_id in task_ids:
-            _obs, total_reward, grader_score = run_episode(task_id, seed=seed)
-            results[task_id] = {
-                "total_reward": total_reward,
-                "grader_score": grader_score,
-            }
-    except Exception as exc:
-        print(f"Error during episode execution: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    elapsed = time.time() - start_time
-
-    print("\n=== Summary ===")
-    print(f"{'task_id':<10} | {'total_reward':>12} | {'grader_score':>12}")
-    print(f"{'-'*10}-|-{'-'*14}-|-{'-'*13}")
-    for task_id in task_ids:
-        r = results[task_id]
-        print(f"{task_id:<10} | {r['total_reward']:>12.4f} | {r['grader_score']:>12.4f}")
-    print(f"\nElapsed time: {elapsed:.2f}s")
+    for task_id in ["easy", "medium", "hard"]:
+        run_episode(task_id, seed=seed)
 
     sys.exit(0)
 
