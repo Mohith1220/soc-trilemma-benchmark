@@ -6,7 +6,7 @@ colorTo: blue
 sdk: docker
 app_port: 7860
 license: mit
-short_description: Research-grade POMDP environment for agentic SOC triage under SLA pressure
+short_description: POMDP environment for agentic SOC triage under SLA pressure
 ---
 
 # 🛡️ SOC Trilemma Benchmark
