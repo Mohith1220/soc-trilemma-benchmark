@@ -100,9 +100,11 @@ def run_episode(task_id: str, seed: int = 42) -> float:
             action  = random_policy(obs, rng, session_id)
             obs     = session_mgr.step(session_id, action)
 
-            reward      = obs.survival_score - prev_score
+            raw_reward  = obs.survival_score - prev_score
             prev_score  = obs.survival_score
             step       += 1
+            # Normalize to strictly (0, 1): map [-1,1] -> [0.01, 0.99]
+            reward = max(0.01, min(0.99, (raw_reward + 1.0) / 2.0))
             rewards.append(reward)
 
             log_step(
