@@ -49,7 +49,7 @@ def create_app(task_config_path: str = "tasks/easy.yaml") -> FastAPI:
                 "SOC analyst triaging DPI alerts under SLA pressure."
             ),
             "version": "1.0.0",
-            "tasks": ["easy", "hard"],
+            "tasks": ["easy", "medium", "hard"],
         }
 
     @application.get("/schema")

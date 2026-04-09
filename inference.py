@@ -47,21 +47,17 @@ def log_start(task: str, env: str, model: str) -> None:
 def log_step(step: int, action: str, reward: float, done: bool, error: str | None) -> None:
     error_str = error if error else "null"
     done_str  = "true" if done else "false"
-    print(
-        f"[STEP]  step={step} action={action} reward={reward:.2f} "
-        f"done={done_str} error={error_str}",
-        flush=True,
-    )
+    line = f"[STEP]  step={step} action={action} reward={reward:.2f} done={done_str} error={error_str}"
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
 
 
 def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     success_str = "true" if success else "false"
-    print(
-        f"[END]   success={success_str} steps={steps} score={score:.2f} "
-        f"rewards={rewards_str}",
-        flush=True,
-    )
+    line = f"[END]   success={success_str} steps={steps} score={score:.2f} rewards={rewards_str}"
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
 
 # ---------------------------------------------------------------------------
 # Policy
