@@ -28,9 +28,9 @@ from app.seed_engine import RoleAssignment, SeedEngine
 from app.soc_grader import SOCGrader
 
 # ---------------------------------------------------------------------------
-# Fixed 12-IP pool
+# IP pool — 20 IPs for richer state space
 # ---------------------------------------------------------------------------
-_IP_POOL: list[str] = [f"10.0.0.{i}" for i in range(1, 13)]
+_IP_POOL: list[str] = [f"10.0.0.{i}" for i in range(1, 21)]
 _IP_POOL_SET: frozenset[str] = frozenset(_IP_POOL)
 
 _TIER_PENALTY = {
@@ -55,9 +55,58 @@ def _stage_for_tick(tick: int) -> KillChainStage:
 
 
 def _assign_tiers(rng: random.Random, ips: list[str]) -> dict[str, str]:
-    labels = ["CRITICAL"] * 2 + ["INTERNAL"] * 4 + ["LOW"] * 6
+    n = len(ips)
+    n_critical = max(2, n // 6)
+    n_internal = max(4, n // 3)
+    n_low = n - n_critical - n_internal
+    labels = ["CRITICAL"] * n_critical + ["INTERNAL"] * n_internal + ["LOW"] * max(0, n_low)
     rng.shuffle(labels)
     return dict(zip(ips, labels))
+
+
+# Realistic noisy payloads for decoy IPs — convincing but benign
+_DECOY_PAYLOADS: dict[KillChainStage, list[str]] = {
+    KillChainStage.Recon: [
+        "Nessus/10.3.1 scheduled scan (authorized IT-SEC-2024-047) | 847 ports | Normal",
+        "LDAP bind: CN=svc_monitor,OU=ServiceAccounts,DC=corp,DC=local | AD health check",
+        "NetBIOS name query: CORP-DC01<00> | Normal Windows name resolution",
+        "ARP probe: who-has 10.0.0.254 | Gratuitous ARP from DHCP renewal | Normal",
+    ],
+    KillChainStage.LateralMovement: [
+        "SMB2 IPC$: CORP\\svc_deploy -> \\\\fileserver\\SYSVOL GPO update | Scheduled (90min)",
+        "WMI query: SELECT * FROM Win32_Service | monitoring agent v3.2 | Normal inventory",
+        "RDP: CORP\\helpdesk01 -> CORP-WS-047 | Ticket INC0047821 | MFA verified | Biz hours",
+        "Kerberos TGT renewal: CORP\\svc_sql | AES256 | Normal service account activity",
+    ],
+    KillChainStage.Exfiltration: [
+        "aws s3 sync /reports/ s3://corp-reports-prod/ | IAM: EC2InstanceRole | 847KB | Scheduled",
+        "Splunk forwarder: 9997 -> splunk-indexer.corp.local | 2.1MB compressed logs | Normal",
+        "OneDrive v23.184: analyst@corp.local | 12 files synced | Normal cloud sync",
+        "Veeam B&R 12.0 incremental backup 847MB | SHA256 verified | Scheduled 03:00 UTC",
+    ],
+}
+
+# Attacker payloads per stage — raw Suricata-style, requires analysis to confirm
+_ATTACKER_PAYLOADS: dict[KillChainStage, str] = {
+    KillChainStage.Recon: (
+        "[QUERIED] [1:2001219:20] ET SCAN Nmap Scripting Engine {TCP} SYN scan "
+        "ports 22,80,443,8080,3389,5985 | TTL:52 Window:1024 | "
+        "Raw: 474554202f20485454502f312e310d0a | OS: Linux 4.x (97%) | "
+        "47 probes/0.8s — AUTOMATED SCANNER CONFIRMED"
+    ),
+    KillChainStage.LateralMovement: (
+        "[QUERIED] [1:2023084:5] ET EXPLOIT NTLM Relay + WMI Exec | "
+        "NTLMSSP_AUTH: aad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c | "
+        "WMI cmd: powershell -enc JABjAGwAaQBlAG4AdAAgAD0A... (b64 reverse shell) | "
+        "Target: ADMIN$ | LATERAL MOVEMENT CONFIRMED"
+    ),
+    KillChainStage.Exfiltration: (
+        "[QUERIED] [1:2030358:1] ET MALWARE C2 Beacon + DNS Tunnel | "
+        "POST https://185.220.101.47/ SNI:*.amazonaws.com (SPOOFED) 48MB entropy:7.98 | "
+        "DNS TXT: aGVsbG8gd29ybGQ=.d4t4.attacker-c2.ru (847 queries) | "
+        "ICMP payload: PK\\x03\\x04 ZIP magic | DATA EXFILTRATION IN PROGRESS"
+    ),
+}
 
 
 def _build_dpi_snapshot(
@@ -68,17 +117,31 @@ def _build_dpi_snapshot(
     queried_ips: set[str],
 ) -> DPISnapshot:
     entries: list[DPIEntry] = []
+    decoy_payloads = _DECOY_PAYLOADS.get(stage, [_MASKED_PAYLOAD])
+    decoy_idx = 0
+
     for ip in all_ips:
-        if ip == attacker_ip and ip in queried_ips:
-            payload = _MALICIOUS_PAYLOAD
+        if ip == attacker_ip:
+            if ip in queried_ips:
+                payload = _ATTACKER_PAYLOADS.get(stage, _MALICIOUS_PAYLOAD)
+                flags = ["SYN", "MALICIOUS"]
+            else:
+                payload = _MASKED_PAYLOAD
+                flags = ["SYN"]
+        elif ip in decoy_ips:
+            payload = decoy_payloads[decoy_idx % len(decoy_payloads)]
+            decoy_idx += 1
+            flags = []
         else:
             payload = _MASKED_PAYLOAD
+            flags = []
+
         entries.append(DPIEntry(
             src_ip=ip,
             dst_ip="10.0.0.254",
             protocol="TCP",
             payload_summary=payload,
-            flags=["SYN"] if ip == attacker_ip else [],
+            flags=flags,
         ))
     return DPISnapshot(
         stage=stage,

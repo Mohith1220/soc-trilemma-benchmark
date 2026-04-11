@@ -38,6 +38,8 @@ test_output.log
 .DS_Store
 Thumbs.db
 
-# Reference projects (do not commit)
-siren-env-main/
-siren-env/
+
+
+# Temp output files
+inference_output.txt
+_test_scores.py

@@ -1,49 +1,66 @@
 {
   "stage": "Recon",
   "ip_pool": [
-    "10.0.0.1",
-    "10.0.0.2",
-    "10.0.0.3",
-    "10.0.0.4",
-    "10.0.0.5",
-    "10.0.0.6",
-    "10.0.0.7"
+    "10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4",
+    "10.0.0.5", "10.0.0.6", "10.0.0.7", "10.0.0.8",
+    "10.0.0.9", "10.0.0.10", "10.0.0.11", "10.0.0.12"
   ],
   "entries": [
     {
       "src_ip": "10.0.0.1",
-      "dst_ip": "10.0.0.5",
+      "dst_ip": "10.0.0.254",
       "protocol": "TCP",
-      "payload_summary": "SYN scan on ports 22,80,443",
-      "flags": ["SYN"]
+      "payload_summary": "04/08-14:32:11.887432 [**] [1:2001219:20] ET SCAN Nmap Scripting Engine User-Agent Detected [**] {TCP} 10.0.0.1:54821 -> 10.0.0.254:80 | SYN scan ports 22,80,443,8080,3389 | TTL:52 Window:1024 | Raw: 474554202f20485454502f312e310d0a",
+      "flags": ["SYN", "SCAN"]
     },
     {
-      "src_ip": "10.0.0.1",
-      "dst_ip": "10.0.0.6",
+      "src_ip": "10.0.0.2",
+      "dst_ip": "10.0.0.254",
       "protocol": "ICMP",
-      "payload_summary": "ICMP echo request sweep",
+      "payload_summary": "04/08-14:32:14.001 ICMP echo sweep 10.0.0.0/24 | 254 hosts probed in 2.1s | Response rate: 8/254 | Payload: 6162636465666768696a6b6c6d6e6f70 (hex-encoded alphanum padding)",
       "flags": ["ECHO_REQUEST"]
     },
     {
-      "src_ip": "10.0.0.2",
-      "dst_ip": "10.0.0.7",
+      "src_ip": "10.0.0.3",
+      "dst_ip": "10.0.0.254",
       "protocol": "UDP",
-      "payload_summary": "DNS query for internal hostnames",
+      "payload_summary": "DNS PTR query storm: 47 reverse lookups in 0.8s | Queries: _ldap._tcp.dc._msdcs.corp.local, _kerberos._tcp.corp.local | Src entropy: 3.2 bits (low — scripted)",
       "flags": []
     },
     {
-      "src_ip": "10.0.0.1",
-      "dst_ip": "10.0.0.3",
+      "src_ip": "10.0.0.4",
+      "dst_ip": "10.0.0.254",
       "protocol": "TCP",
-      "payload_summary": "Banner grabbing on port 21",
+      "payload_summary": "Banner grab port 21: 220 ProFTPD 1.3.5 Server | port 22: SSH-2.0-OpenSSH_7.4 | port 25: 220 mail.corp.local ESMTP | Timing: 120ms between probes (scripted jitter)",
       "flags": ["SYN", "ACK"]
     },
     {
-      "src_ip": "10.0.0.2",
-      "dst_ip": "10.0.0.4",
+      "src_ip": "10.0.0.5",
+      "dst_ip": "10.0.0.254",
       "protocol": "TCP",
-      "payload_summary": "OS fingerprinting via TCP options",
+      "payload_summary": "Normal workstation traffic: Windows Update KB5034441 download from 13.107.4.52 | 142MB over 8min | User-Agent: Windows-Update-Agent/10.0.10011.16384",
+      "flags": []
+    },
+    {
+      "src_ip": "10.0.0.6",
+      "dst_ip": "10.0.0.254",
+      "protocol": "TCP",
+      "payload_summary": "Printer spooler heartbeat: HP LaserJet M404dn -> print-server.corp.local:9100 | 847 bytes | IPP/2.0 Get-Printer-Attributes | Interval: 30s (normal device keepalive)",
+      "flags": []
+    },
+    {
+      "src_ip": "10.0.0.7",
+      "dst_ip": "10.0.0.254",
+      "protocol": "TCP",
+      "payload_summary": "OS fingerprint via TCP options: MSS=1460 WS=256 TS=1 SACK=1 | Nmap OS guess: Linux 4.15-5.6 (97%) | Probe sequence: S1 S2 IE1 IE2 U1 T2-T7",
       "flags": ["SYN"]
+    },
+    {
+      "src_ip": "10.0.0.8",
+      "dst_ip": "10.0.0.254",
+      "protocol": "UDP",
+      "payload_summary": "SNMP walk v2c community=public: 1.3.6.1.2.1.1.1.0 sysDescr, 1.3.6.1.2.1.1.5.0 sysName | 312 OIDs enumerated | Source: known asset mgmt server (scheduled scan)",
+      "flags": []
     }
   ]
 }

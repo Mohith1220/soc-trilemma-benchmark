@@ -1,48 +1,66 @@
 {
   "stage": "Exfiltration",
   "ip_pool": [
-    "172.16.0.20",
-    "172.16.0.21",
-    "172.16.0.22",
-    "172.16.0.23",
-    "172.16.0.24",
-    "172.16.0.25"
+    "10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4",
+    "10.0.0.5", "10.0.0.6", "10.0.0.7", "10.0.0.8",
+    "10.0.0.9", "10.0.0.10", "10.0.0.11", "10.0.0.12"
   ],
   "entries": [
     {
-      "src_ip": "172.16.0.20",
-      "dst_ip": "172.16.0.25",
+      "src_ip": "10.0.0.1",
+      "dst_ip": "10.0.0.254",
       "protocol": "HTTPS",
-      "payload_summary": "Large encrypted POST to external C2 server, 48MB payload",
-      "flags": ["TLS", "LARGE_PAYLOAD"]
+      "payload_summary": "TLS1.3 POST https://185.220.101.47/upload | SNI: cdn-assets-prod.s3-accelerate.amazonaws.com (SPOOFED — IP not in AWS range) | Body: 48MB multipart/form-data | Entropy: 7.98 bits/byte (encrypted/compressed) | Cert: self-signed CN=*.amazonaws.com issued 2h ago",
+      "flags": ["TLS", "LARGE_PAYLOAD", "C2", "SPOOFED_SNI"]
     },
     {
-      "src_ip": "172.16.0.21",
-      "dst_ip": "172.16.0.25",
+      "src_ip": "10.0.0.2",
+      "dst_ip": "10.0.0.254",
       "protocol": "DNS",
-      "payload_summary": "DNS tunneling with base64-encoded data in TXT records",
-      "flags": ["TUNNEL", "ENCODED"]
+      "payload_summary": "DNS TXT exfil: 847 queries to *.d4t4-x3f1l.attacker-c2.ru in 4min | Subdomain entropy: 6.1 bits (b64 encoded) | Sample: aGVsbG8gd29ybGQgdGhpcyBpcyBleGZpbA==.d4t4-x3f1l.attacker-c2.ru | [**] ET DNS Query for Suspicious TLD .ru",
+      "flags": ["TUNNEL", "ENCODED", "DNS_EXFIL"]
     },
     {
-      "src_ip": "172.16.0.22",
-      "dst_ip": "172.16.0.24",
+      "src_ip": "10.0.0.3",
+      "dst_ip": "10.0.0.254",
       "protocol": "FTP",
-      "payload_summary": "Bulk file transfer of compressed archive to staging server",
-      "flags": ["DATA", "COMPRESSED"]
+      "payload_summary": "Authorized nightly archive: ftps://backup.corp.local | User: svc_backup | 847MB corp_backup_20260408.tar.gz.enc | SHA256 matches expected | Cert: corp-ca | Schedule: daily 03:00 UTC (on time)",
+      "flags": []
     },
     {
-      "src_ip": "172.16.0.20",
-      "dst_ip": "172.16.0.23",
+      "src_ip": "10.0.0.4",
+      "dst_ip": "10.0.0.254",
       "protocol": "ICMP",
-      "payload_summary": "ICMP covert channel carrying fragmented data chunks",
-      "flags": ["COVERT", "FRAGMENTED"]
+      "payload_summary": "ICMP type 0 covert channel: 1,247 echo-reply packets | Payload size: 1480 bytes (max MTU, unusual for ICMP) | Payload hex sample: 504b0304140000000800... (PK magic — ZIP header) | Inter-packet jitter: 47ms (C2 beacon timing)",
+      "flags": ["COVERT", "FRAGMENTED", "BEACON"]
     },
     {
-      "src_ip": "172.16.0.21",
-      "dst_ip": "172.16.0.25",
+      "src_ip": "10.0.0.5",
+      "dst_ip": "10.0.0.254",
       "protocol": "TCP",
-      "payload_summary": "Steganographic data embedded in HTTP image responses",
-      "flags": ["STEGO", "HTTP"]
+      "payload_summary": "CDN image delivery: GET /assets/logo.png HTTP/2 from 104.16.0.0/12 (Cloudflare) | 847 bytes | ETag matches cached version | Referer: https://corp-intranet.local/dashboard | Normal browser traffic",
+      "flags": []
+    },
+    {
+      "src_ip": "10.0.0.6",
+      "dst_ip": "10.0.0.254",
+      "protocol": "HTTPS",
+      "payload_summary": "Salesforce CRM sync: POST https://corp.my.salesforce.com/services/data/v57.0/sobjects/Lead | OAuth2 Bearer token | 12KB JSON payload | User: sales@corp.local | Normal CRM activity",
+      "flags": []
+    },
+    {
+      "src_ip": "10.0.0.7",
+      "dst_ip": "10.0.0.254",
+      "protocol": "TCP",
+      "payload_summary": "HTTP steganography: GET /images/banner_v3.jpg | Response 2.1MB JPEG | LSB analysis: 847KB hidden payload detected | Pixel entropy anomaly at offset 0x4A00 | [**] ET WEB_CLIENT Possible Image Steganography Exfiltration",
+      "flags": ["STEGO", "HTTP", "ANOMALY"]
+    },
+    {
+      "src_ip": "10.0.0.8",
+      "dst_ip": "10.0.0.254",
+      "protocol": "SMTP",
+      "payload_summary": "Email: From: svc_monitor@corp.local To: reports@external-analytics.io | Subject: Weekly Metrics | Attachment: metrics_wk14.xlsx (847KB) | Content-Type: application/vnd.ms-excel | Sent outside business hours 03:17 UTC | Recipient domain registered 6 days ago",
+      "flags": ["EMAIL", "OFFHOURS", "NEW_DOMAIN"]
     }
   ]
 }
