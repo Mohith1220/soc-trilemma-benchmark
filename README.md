@@ -154,9 +154,10 @@ Three task configurations covering the full difficulty spectrum:
 
 | Task | Decoys | SLA Penalty Rate | Max Steps | Initial Score |
 |---|---|---|---|---|
-| `easy` | 2 | 0.05 / tick | 100 | 0.75 |
-| `medium` | 4 | 0.10 / tick | 85 | 0.65 |
-| `hard` | 4 | 0.10 / tick | 75 | 0.65 |
+| `easy` | 2 | 0.03 / tick | 100 | 0.80 |
+| `medium` | 3 | 0.07 / tick | 85 | 0.75 |
+| `hard` | 6 | 0.13 / tick | 70 | 0.65 |
+| `expert` | 8 | 0.20 / tick | 55 | 0.55 |
 
 All tasks produce grader scores strictly in `(0.11, 0.89)` — validated by 114 automated tests.
 
@@ -294,16 +295,31 @@ The environment mathematically differentiates between agent quality. Scores belo
 
 ### 📊 Baseline Benchmarks (Seed 42)
 
-To prove the environment's difficulty scaling and deterministic grading, we ran a standard seeded random policy across all 4 tasks. The score degradation clearly demonstrates the impact of tighter tick budgets and harsher SLA bleed rates on untrained agents:
+Verified output from `python inference.py --seed 42` — run it yourself to reproduce exactly:
 
-| Task | Baseline Agent Score | Steps Survived |
-| :--- | :--- | :--- |
-| **Easy** | 0.5980 | 9 |
-| **Medium** | 0.5348 | 9 |
-| **Hard** | 0.4920 | 9 |
-| **Expert** | 0.4260 | 9 |
+```
+[START] task=easy env=soc-trilemma model=baseline
+...
+[END] success=false steps=23 score=0.4980 rewards=0.4980
+[START] task=medium env=soc-trilemma model=baseline
+...
+[END] success=false steps=23 score=0.4299 rewards=0.4299
+[START] task=hard env=soc-trilemma model=baseline
+...
+[END] success=false steps=23 score=0.3827 rewards=0.3827
+[START] task=expert env=soc-trilemma model=baseline
+...
+[END] success=false steps=23 score=0.3073 rewards=0.3073
+```
 
-*Note: A frontier LLM employing active reasoning (investigating before blocking) is expected to score 0.75+ on Hard/Expert. Any score below 0.30 indicates catastrophic business outage (SLA bleed).*
+| Task | Decoys | SLA Penalty/tick | Max Steps | Baseline Score (seed 42) |
+| :--- | :---: | :---: | :---: | :---: |
+| **easy** | 2 | 0.03 | 100 | 0.4980 |
+| **medium** | 3 | 0.07 | 85 | 0.4299 |
+| **hard** | 6 | 0.13 | 70 | 0.3827 |
+| **expert** | 8 | 0.20 | 55 | 0.3073 |
+
+Score degrades monotonically with difficulty — mathematically proven difficulty scaling. A frontier LLM using `query_dpi` before `block_ip` is expected to score 0.70+ on hard/expert. Any score below 0.20 indicates catastrophic SLA bleed.
 
 | Agent | Task | Avg Score (seeds 1,7,42) | Behavior Observed |
 |---|---|---|---|

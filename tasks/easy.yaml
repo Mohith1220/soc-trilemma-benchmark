@@ -4,5 +4,5 @@ stage_time_budgets:
   Recon: 30
   Lateral_Movement: 25
   Exfiltration: 20
-sla_penalty_rate: 0.05
+sla_penalty_rate: 0.03
 num_decoys: 2

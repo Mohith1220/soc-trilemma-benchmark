@@ -1,8 +1,8 @@
 name: expert
-max_steps: 60
+max_steps: 55
 stage_time_budgets:
   Recon: 15
-  Lateral_Movement: 12
-  Exfiltration: 10
+  Lateral_Movement: 10
+  Exfiltration: 8
 sla_penalty_rate: 0.20
-num_decoys: 6
+num_decoys: 8
