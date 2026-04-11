@@ -6,7 +6,7 @@ colorTo: blue
 sdk: docker
 app_port: 7860
 license: mit
-short_description: POMDP benchmark where LLMs triage cyberattacks under SLA pressure
+short_description: LLM benchmark — SOC triage under SLA pressure
 ---
 
 # 🛡️ SOC Trilemma Benchmark
