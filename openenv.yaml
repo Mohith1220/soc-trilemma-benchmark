@@ -46,3 +46,7 @@ server:
     - POST /reset
     - POST /step
     - GET /state
+    - GET /metadata
+    - GET /schema
+    - POST /mcp
+    - WebSocket /ws
