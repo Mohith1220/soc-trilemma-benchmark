@@ -1,12 +1,12 @@
 # Runtime dependencies
-fastapi
-uvicorn[standard]
-pydantic>=2.0
-pyyaml
-httpx
-openai
-openenv-core>=0.2.3
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+pydantic>=2.0,<3.0
+pyyaml>=6.0
+httpx>=0.24.0
+openai>=1.0.0
 
 # Test dependencies
-hypothesis
-pytest
+hypothesis>=6.0
+pytest>=7.0
+pytest-asyncio>=0.21
