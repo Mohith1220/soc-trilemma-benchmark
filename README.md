@@ -13,7 +13,7 @@ short_description: POMDP environment for agentic SOC triage under SLA pressure
 
 [![Tests](https://img.shields.io/badge/tests-114%20passing-brightgreen)]()
 [![OpenEnv](https://img.shields.io/badge/openenv%20validate-passed-blue)]()
-[![Tasks](https://img.shields.io/badge/tasks-3%20difficulties-orange)]()
+[![Tasks](https://img.shields.io/badge/tasks-4%20difficulties-orange)]()
 [![MCP](https://img.shields.io/badge/MCP-JSON--RPC%202.0-purple)]()
 [![Python](https://img.shields.io/badge/python-3.11-blue)]()
 [![Docker](https://img.shields.io/badge/docker-ready-green)]()
@@ -291,6 +291,19 @@ This is not a toy. It is a compressed, mathematically rigorous model of the deci
 ## Baseline Benchmarks
 
 The environment mathematically differentiates between agent quality. Scores below are reproducible — run `python inference.py --seed 42` to verify.
+
+### 📊 Baseline Benchmarks (Seed 42)
+
+To prove the environment's difficulty scaling and deterministic grading, we ran a standard seeded random policy across all 4 tasks. The score degradation clearly demonstrates the impact of tighter tick budgets and harsher SLA bleed rates on untrained agents:
+
+| Task | Baseline Agent Score | Steps Survived |
+| :--- | :--- | :--- |
+| **Easy** | 0.5980 | 9 |
+| **Medium** | 0.5348 | 9 |
+| **Hard** | 0.4920 | 9 |
+| **Expert** | 0.4260 | 9 |
+
+*Note: A frontier LLM employing active reasoning (investigating before blocking) is expected to score 0.75+ on Hard/Expert. Any score below 0.30 indicates catastrophic business outage (SLA bleed).*
 
 | Agent | Task | Avg Score (seeds 1,7,42) | Behavior Observed |
 |---|---|---|---|

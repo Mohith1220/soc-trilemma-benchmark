@@ -28,6 +28,7 @@ TASK_CONFIGS = {
     "easy":   "tasks/easy.yaml",
     "medium": "tasks/medium.yaml",
     "hard":   "tasks/hard.yaml",
+    "expert": "tasks/expert.yaml",
 }
 _ACTION_TYPES = list(ActionType)
 
@@ -103,7 +104,7 @@ def run_episode(task_id: str, seed: int = 42) -> float:
     using_llm    = _get_client() is not None
     policy_label = f"LLM ({MODEL_NAME})" if using_llm else "baseline (fallback)"
 
-    sys.stdout.write(f"[START] task={task_id} seed={seed} policy={policy_label}\n")
+    sys.stdout.write(f"[START] task={task_id} env=soc-trilemma model={MODEL_NAME or 'baseline'}\n")
     sys.stdout.flush()
 
     obs          = session_mgr.create_or_reset(session_id, seed=seed)
@@ -111,6 +112,9 @@ def run_episode(task_id: str, seed: int = 42) -> float:
     step         = 0
     total_reward = 0.0
     cumulative   = 0.0
+    queried_ips_before_block: set[str] = set()
+    false_positives = 0
+    queried_before_block = False
 
     try:
         while not obs.done and step < MAX_STEPS:
@@ -119,6 +123,17 @@ def run_episode(task_id: str, seed: int = 42) -> float:
             if action is None:
                 action = random_policy(obs, rng, session_id)
 
+            # Track forensic discipline
+            if action.action_type == ActionType.QueryDPI:
+                queried_ips_before_block.add(action.target_ip)
+            if action.action_type == ActionType.BlockIP:
+                if action.target_ip in queried_ips_before_block:
+                    queried_before_block = True
+                # Track false positives (wrong blocks) — detected via outage alerts
+                prev_outage_count = len([
+                    a for a in obs.alerts if "Business outage" in a.message
+                ])
+
             obs        = session_mgr.step(session_id, action)
             reward     = obs.survival_score - prev_score
             prev_score = obs.survival_score
@@ -126,29 +141,51 @@ def run_episode(task_id: str, seed: int = 42) -> float:
             total_reward += reward
             cumulative   += reward
 
+            # Count false positives
+            if action.action_type == ActionType.BlockIP:
+                new_outage_count = len([
+                    a for a in obs.alerts if "Business outage" in a.message
+                ])
+                if new_outage_count > prev_outage_count:
+                    false_positives += 1
+
             done_str   = "true" if obs.done else "false"
             action_str = f"{action.action_type.value}({action.target_ip})"
             sys.stdout.write(
-                f"[STEP]  step={step} action={action_str} reward={reward:.4f}"
-                f" cumulative_reward={cumulative:.4f} done={done_str}\n"
+                f"[STEP] step={step} action={action_str} reward={reward:.4f}"
+                f" done={done_str} error=null\n"
             )
             sys.stdout.flush()
 
     except Exception as exc:
         sys.stdout.write(
-            f"[STEP]  step={step+1} action=error reward=0.0000"
-            f" cumulative_reward={cumulative:.4f} done=true\n"
+            f"[STEP] step={step+1} action=error reward=0.0000"
+            f" done=true error={str(exc)[:80]}\n"
         )
         sys.stdout.flush()
 
     grader_score = grader.grade(
-        {"survival_score": obs.survival_score, "done": obs.done, "tick": obs.tick},
+        {
+            "survival_score": obs.survival_score,
+            "done": obs.done,
+            "tick": obs.tick,
+            "steps": step,
+            "queried_before_block": queried_before_block,
+            "false_positives": false_positives,
+        },
         task_id,
     )
 
+    # Clamp strictly within (0.001, 0.999) — never 0.0 or 1.0
+    grader_score = max(0.001, min(0.999, grader_score))
+
+    success_str  = "true" if grader_score >= 0.5 else "false"
+    rewards_str  = f"{grader_score:.4f}"
+
+    # [END] format required by OpenEnv validator
     sys.stdout.write(
-        f"[END]   task={task_id} score={grader_score:.4f}"
-        f" steps={step} total_reward={total_reward:.4f}\n"
+        f"[END] success={success_str} steps={step}"
+        f" score={grader_score:.4f} rewards={rewards_str}\n"
     )
     sys.stdout.flush()
     return grader_score
@@ -163,7 +200,7 @@ def main():
     results = {}
     start   = time.time()
     try:
-        for task_id in ["easy", "medium", "hard"]:
+        for task_id in ["easy", "medium", "hard", "expert"]:
             results[task_id] = run_episode(task_id, seed=seed)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
