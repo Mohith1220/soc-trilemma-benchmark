@@ -12,28 +12,28 @@ description: >
 
 tasks:
   - id: easy
-    description: "Easy difficulty — 2 decoys, low SLA penalty, 100 max steps"
+    description: "Easy — 2 decoys, 0.03 SLA penalty/tick, 100 max steps"
     path: tasks/easy.yaml
     pass_criteria:
       attacker_blocked: true
       min_survival_score: 0.3
 
   - id: medium
-    description: "Medium difficulty — 4 decoys, moderate SLA penalty, 85 max steps"
+    description: "Medium — 3 decoys, 0.07 SLA penalty/tick, 85 max steps"
     path: tasks/medium.yaml
     pass_criteria:
       attacker_blocked: true
       min_survival_score: 0.25
 
   - id: hard
-    description: "Hard difficulty — 4 decoys, high SLA penalty, 75 max steps"
+    description: "Hard — 6 decoys, 0.13 SLA penalty/tick, 70 max steps"
     path: tasks/hard.yaml
     pass_criteria:
       attacker_blocked: true
       min_survival_score: 0.2
 
   - id: expert
-    description: "Expert difficulty — 6 decoys, 0.20 SLA penalty, 60 max steps"
+    description: "Expert — 8 decoys, 0.20 SLA penalty/tick, 55 max steps"
     path: tasks/expert.yaml
     pass_criteria:
       attacker_blocked: true

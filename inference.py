@@ -36,6 +36,23 @@ _ACTION_TYPES = [
     "block_ip", "query_dpi", "resolve_outage", "wait", "allow_ip", "isolate_host"
 ]
 
+# ---------------------------------------------------------------------------
+# Inlined grader — no dependency on app.* package
+# Scores strictly in (0.12, 0.88) — never 0.0 or 1.0
+# ---------------------------------------------------------------------------
+_TASK_BASE     = {"easy": 0.22, "medium": 0.19, "hard": 0.16, "expert": 0.13}
+_TASK_MAXSTEPS = {"easy": 100,  "medium": 85,   "hard": 70,   "expert": 55}
+
+
+def _grade(survival: float, blocked: bool, steps: int, task_id: str) -> float:
+    base      = _TASK_BASE.get(task_id, 0.16)
+    max_steps = _TASK_MAXSTEPS.get(task_id, 75)
+    score     = base + survival * 0.35
+    if blocked:
+        score += 0.20
+        score += max(0.0, 1.0 - steps / max_steps) * 0.10
+    return max(0.12, min(0.88, score))
+
 SYSTEM_PROMPT = """\
 You are a SOC analyst agent. Given a JSON observation, respond with ONE JSON action.
 Schema: {"action_type": "block_ip|query_dpi|resolve_outage|wait", "target_ip": "10.0.0.X", "session_id": "..."}
@@ -164,8 +181,6 @@ def _is_healthy() -> bool:
 # Episode runner — HTTP against live server
 # ---------------------------------------------------------------------------
 def run_episode(task_id: str, seed: int) -> float:
-    from app.episode_grader import EpisodeGrader
-    grader     = EpisodeGrader()
     session_id = f"inf_{task_id}_{seed}"
 
     # Use task-specific seed so each task gets different IP assignments
@@ -237,31 +252,16 @@ def run_episode(task_id: str, seed: int) -> float:
         )
         sys.stdout.flush()
 
-    # Grade
-    attacker_blocked = obs.get("done", False) and any(
-        "Attacker exfiltrated" not in a.get("message", "")
-        and obs.get("done", False)
-        for a in obs.get("alerts", [{}])[-1:]
-    )
-    # Simpler: done=True AND no "exfiltrated" alert = correct block
-    exfiltrated = any(
+    # Grade — inlined, no app.* import needed
+    exfiltrated      = any(
         "exfiltrated" in a.get("message", "").lower()
         for a in obs.get("alerts", [])
     )
     attacker_blocked = obs.get("done", False) and not exfiltrated
+    survival         = obs.get("survival_score", 0.5)
 
-    grader_score = grader.grade(
-        {
-            "survival_score": obs.get("survival_score", 0.5),
-            "done":           attacker_blocked,   # only True if correctly blocked
-            "tick":           obs.get("tick", 0),
-            "steps":          step,
-        },
-        task_id,
-    )
-    grader_score = max(0.001, min(0.999, grader_score))
-
-    success_str = "true" if attacker_blocked else "false"
+    grader_score = _grade(survival, attacker_blocked, step, task_id)
+    success_str  = "true" if attacker_blocked else "false"
 
     sys.stdout.write(
         f"[END] success={success_str} steps={step}"
