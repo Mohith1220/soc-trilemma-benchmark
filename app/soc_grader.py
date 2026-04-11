@@ -11,13 +11,8 @@ _TIER_PENALTY: dict[str, float] = {
 
 
 def _clamp(score: float) -> float:
-    """
-    Clamp score strictly inside (0.11, 0.89) range.
-    Ensures scores are never exactly 0.0, 1.0, or at risky boundaries.
-    """
-    min_score = 0.11
-    max_score = 0.89
-    return max(min_score, min(max_score, score))
+    """Clamp score strictly inside (0.12, 0.88) — never 0.0 or 1.0."""
+    return max(0.12, min(0.88, score))
 
 
 class SOCGrader:

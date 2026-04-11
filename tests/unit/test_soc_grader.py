@@ -22,15 +22,15 @@ def test_score_does_not_go_below_zero():
     grader.active_outages.append(
         BusinessOutage(target_ip=DECOY_A, created_at_tick=0, penalty_per_tick=0.5)
     )
-    grader.apply_tick_penalties(tick_cost=10)  # penalty = 5.0, way over 0.2
-    assert grader.survival_score == 0.11  # minimum floor
+    grader.apply_tick_penalties(tick_cost=10)
+    assert grader.survival_score == 0.12  # minimum floor
 
 
 def test_score_does_not_exceed_one_on_correct_block():
     grader = SOCGrader(sla_penalty_rate=0.05)
-    grader.survival_score = 0.85  # already near ceiling
+    grader.survival_score = 0.85
     result = grader.grade_action(_action(ActionType.BlockIP, ATTACKER), ATTACKER, 0)
-    assert result.survival_score == 0.89  # clamped at max
+    assert result.survival_score == 0.88  # clamped at max
 
 
 # --- Simultaneous outages accumulate correctly ---

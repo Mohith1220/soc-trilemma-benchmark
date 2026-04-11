@@ -34,7 +34,7 @@ def write_tmp(tmp_path, content: str) -> str:
 def test_easy_config_loads(tmp_path):
     cfg = load_task_config(EASY_YAML)
     assert cfg.max_steps == 100
-    assert cfg.sla_penalty_rate == 0.05
+    assert cfg.sla_penalty_rate == 0.03
     assert cfg.num_decoys == 2
     assert cfg.stage_time_budgets[KillChainStage.Recon] == 30
     assert cfg.stage_time_budgets[KillChainStage.LateralMovement] == 25
@@ -43,9 +43,9 @@ def test_easy_config_loads(tmp_path):
 
 def test_hard_config_loads():
     cfg = load_task_config(HARD_YAML)
-    assert cfg.max_steps == 75
-    assert cfg.sla_penalty_rate == 0.1
-    assert cfg.num_decoys == 4
+    assert cfg.max_steps == 70
+    assert cfg.sla_penalty_rate == 0.13
+    assert cfg.num_decoys == 6
 
 
 def test_hard_has_more_decoys_than_easy():
