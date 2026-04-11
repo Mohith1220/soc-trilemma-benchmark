@@ -14,10 +14,6 @@ tasks:
   - id: easy
     description: "Easy difficulty — 2 decoys, low SLA penalty, 100 max steps"
     path: tasks/easy.yaml
-    grader:
-      type: inference
-      script: inference.py
-      score_key: grader_score
     pass_criteria:
       attacker_blocked: true
       min_survival_score: 0.3
@@ -25,10 +21,6 @@ tasks:
   - id: medium
     description: "Medium difficulty — 4 decoys, moderate SLA penalty, 85 max steps"
     path: tasks/medium.yaml
-    grader:
-      type: inference
-      script: inference.py
-      score_key: grader_score
     pass_criteria:
       attacker_blocked: true
       min_survival_score: 0.25
@@ -36,13 +28,16 @@ tasks:
   - id: hard
     description: "Hard difficulty — 4 decoys, high SLA penalty, 75 max steps"
     path: tasks/hard.yaml
-    grader:
-      type: inference
-      script: inference.py
-      score_key: grader_score
     pass_criteria:
       attacker_blocked: true
       min_survival_score: 0.2
+
+  - id: expert
+    description: "Expert difficulty — 6 decoys, 0.20 SLA penalty, 60 max steps"
+    path: tasks/expert.yaml
+    pass_criteria:
+      attacker_blocked: true
+      min_survival_score: 0.15
 
 server:
   port: 7860
