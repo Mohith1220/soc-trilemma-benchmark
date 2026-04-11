@@ -321,7 +321,8 @@ class SessionManager:
                 tick=new_tick,
             ))
 
-        # 6. Termination
+        # 6. Termination — use task config tick limit, not hardcoded 60
+        tick_limit = sum(self._task_config.stage_time_budgets.values())
         correct_block = (
             action.action_type == ActionType.BlockIP
             and action.target_ip == state.attacker_ip
@@ -329,11 +330,11 @@ class SessionManager:
         state.step_count += 1
         done = (
             correct_block
-            or new_tick > 60
+            or new_tick > tick_limit
             or state.step_count >= self._task_config.max_steps
         )
 
-        if done and not correct_block and new_tick > 60:
+        if done and not correct_block and new_tick > tick_limit:
             from app.soc_grader import _clamp
             state.soc_grader.survival_score = _clamp(
                 state.soc_grader.survival_score - 1.0

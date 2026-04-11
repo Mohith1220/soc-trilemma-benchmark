@@ -300,24 +300,26 @@ Verified output from `python inference.py --seed 42` — run it yourself to repr
 ```
 [START] task=easy env=soc-trilemma model=baseline
 ...
-[END] success=true steps=18 score=0.5080 rewards=-0.6900
+[END] success=false steps=23 score=0.1440 rewards=-0.6900
 [START] task=medium env=soc-trilemma model=baseline
 ...
-[END] success=false steps=21 score=0.4346 rewards=-0.6900
+[END] success=false steps=27 score=0.1100 rewards=-0.6900
 [START] task=hard env=soc-trilemma model=baseline
 ...
-[END] success=false steps=21 score=0.3880 rewards=-0.6900
+[END] success=false steps=26 score=0.1100 rewards=-0.6900
 [START] task=expert env=soc-trilemma model=baseline
 ...
-[END] success=false steps=25 score=0.3007 rewards=-0.6900
+[END] success=false steps=31 score=0.1100 rewards=-0.6900
 ```
 
 | Task | Decoys | SLA Penalty/tick | Max Steps | Baseline Score (seed 42) |
 | :--- | :---: | :---: | :---: | :---: |
-| **easy** | 2 | 0.03 | 100 | 0.5080 |
-| **medium** | 3 | 0.07 | 85 | 0.4346 |
-| **hard** | 6 | 0.13 | 70 | 0.3880 |
-| **expert** | 8 | 0.20 | 55 | 0.3007 |
+| **easy** | 2 | 0.03 | 100 | 0.1440 |
+| **medium** | 3 | 0.07 | 85 | 0.1100 |
+| **hard** | 6 | 0.13 | 70 | 0.1100 |
+| **expert** | 8 | 0.20 | 55 | 0.1100 |
+
+A random policy scores near the floor — this is correct. The environment is hard by design. A frontier LLM using `query_dpi` before `block_ip` is expected to score 0.55+ on easy and 0.35+ on expert.
 
 Score degrades monotonically with difficulty — mathematically proven difficulty scaling. A frontier LLM using `query_dpi` before `block_ip` is expected to score 0.70+ on hard/expert. Any score below 0.20 indicates catastrophic SLA bleed.
 

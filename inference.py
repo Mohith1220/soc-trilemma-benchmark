@@ -232,10 +232,22 @@ def run_episode(task_id: str, seed: int) -> float:
         sys.stdout.flush()
 
     # Grade
+    attacker_blocked = obs.get("done", False) and any(
+        "Attacker exfiltrated" not in a.get("message", "")
+        and obs.get("done", False)
+        for a in obs.get("alerts", [{}])[-1:]
+    )
+    # Simpler: done=True AND no "exfiltrated" alert = correct block
+    exfiltrated = any(
+        "exfiltrated" in a.get("message", "").lower()
+        for a in obs.get("alerts", [])
+    )
+    attacker_blocked = obs.get("done", False) and not exfiltrated
+
     grader_score = grader.grade(
         {
             "survival_score": obs.get("survival_score", 0.5),
-            "done":           obs.get("done", False),
+            "done":           attacker_blocked,   # only True if correctly blocked
             "tick":           obs.get("tick", 0),
             "steps":          step,
         },
@@ -243,7 +255,7 @@ def run_episode(task_id: str, seed: int) -> float:
     )
     grader_score = max(0.001, min(0.999, grader_score))
 
-    success_str = "true" if grader_score >= 0.5 else "false"
+    success_str = "true" if attacker_blocked else "false"
 
     sys.stdout.write(
         f"[END] success={success_str} steps={step}"
