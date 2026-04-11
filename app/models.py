@@ -81,8 +81,15 @@ class DPITemplate(BaseModel):
 class DPISnapshot(BaseModel):
     stage: KillChainStage
     entries: list[DPIEntry]
-    attacker_ip: str
-    decoy_ips: list[str]
+    attacker_ip: str = ""          # masked in API responses — only set internally
+    decoy_ips: list[str] = []      # masked in API responses — only set internally
+
+    def model_dump(self, **kwargs):
+        """Override to mask attacker_ip and decoy_ips from agent observations."""
+        d = super().model_dump(**kwargs)
+        d["attacker_ip"] = ""      # never expose to agent
+        d["decoy_ips"] = []        # never expose to agent
+        return d
 
 
 class BusinessOutage(BaseModel):

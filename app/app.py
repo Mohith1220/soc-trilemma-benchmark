@@ -139,7 +139,8 @@ def create_app(task_config_path: str = "tasks/easy.yaml") -> FastAPI:
             params = body.get("params", {})
             tool_name = params.get("name", "")
             args = params.get("arguments", {})
-            session_id = args.get("session_id", "default")
+            # Use caller-provided session_id; require it to be explicit
+            session_id = args.get("session_id") or params.get("session_id") or f"mcp-{req_id}"
             target_ip = args.get("target_ip", "")
 
             action_map = {

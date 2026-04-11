@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -162,6 +163,7 @@ class _SessionState:
     all_ips: list[str]
     ip_tiers: dict[str, str]
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    thread_lock: threading.Lock = field(default_factory=threading.Lock)
     has_pivoted: bool = False
     step_count: int = 0
     done: bool = False
@@ -224,11 +226,11 @@ class SessionManager:
         return self._build_observation(state, done=False)
 
     def step(self, session_id: str, action: Action) -> Observation:
-        """Synchronous step — wraps _step_inner without async lock for HTTP endpoints."""
+        """Synchronous step — uses threading.Lock to prevent HTTP race conditions."""
         state = self._get_or_404(session_id)
-        # Mark session as recently used (LRU)
         self._sessions.move_to_end(session_id)
-        return self._step_inner(state, action)
+        with state.thread_lock:
+            return self._step_inner(state, action)
 
     async def async_step(self, session_id: str, action: Action) -> Observation:
         """Async step with per-session lock — used by WebSocket endpoint."""
