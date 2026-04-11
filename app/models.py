@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_serializer, field_validator
 
 
 class KillChainStage(str, Enum):
@@ -81,15 +81,16 @@ class DPITemplate(BaseModel):
 class DPISnapshot(BaseModel):
     stage: KillChainStage
     entries: list[DPIEntry]
-    attacker_ip: str = ""          # masked in API responses — only set internally
-    decoy_ips: list[str] = []      # masked in API responses — only set internally
+    attacker_ip: str = ""
+    decoy_ips: list[str] = []
 
-    def model_dump(self, **kwargs):
-        """Override to mask attacker_ip and decoy_ips from agent observations."""
-        d = super().model_dump(**kwargs)
-        d["attacker_ip"] = ""      # never expose to agent
-        d["decoy_ips"] = []        # never expose to agent
-        return d
+    @field_serializer("attacker_ip")
+    def _mask_attacker(self, v: str) -> str:
+        return ""  # never expose attacker IP to agent
+
+    @field_serializer("decoy_ips")
+    def _mask_decoys(self, v: list) -> list:
+        return []  # never expose decoy IPs to agent
 
 
 class BusinessOutage(BaseModel):

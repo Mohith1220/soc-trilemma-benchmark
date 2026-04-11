@@ -326,10 +326,13 @@ function updateUI(obs) {
   const tbody = document.getElementById("dpi-table");
   tbody.innerHTML = "";
   for (const e of obs.dpi_data.entries) {
-    const isMalicious = e.payload_summary === "MALICIOUS SIGNATURE DETECTED";
+    const isMalicious = e.payload_summary.includes("MALICIOUS") || e.payload_summary.includes("[QUERIED]") || (e.flags && e.flags.includes("MALICIOUS"));
+    const isDecoy = e.payload_summary.length > 40 && !e.payload_summary.includes("Standard Traffic") && !isMalicious;
     const tr = document.createElement("tr");
     tr.className = isMalicious
       ? "bg-red-950 text-red-300 border-b border-red-900"
+      : isDecoy
+      ? "bg-yellow-950 text-yellow-200 border-b border-yellow-900"
       : "border-b border-gray-800 text-gray-300 hover:bg-gray-800 cursor-pointer";
     tr.innerHTML = `
       <td class="px-2 py-1 font-mono">${e.src_ip}</td>
@@ -373,7 +376,8 @@ async function doReset() {
 
 async function doStep(actionType) {
   if (!lastObs) { alert("Reset first"); return; }
-  const targetIp = document.getElementById("target-ip").value.trim() || lastObs.dpi_data.attacker_ip;
+  const targetIp = document.getElementById("target-ip").value.trim();
+  if (!targetIp) { alert("Enter a target IP first"); return; }
   setStatus("stepping...", "text-yellow-400");
   try {
     const r = await fetch("/step", {

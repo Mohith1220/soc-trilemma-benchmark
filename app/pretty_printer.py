@@ -56,7 +56,7 @@ class PrettyPrinter:
       </div>
       <div class="bg-gray-800 rounded p-3">
         <div class="text-xs text-gray-400">Tick</div>
-        <div class="text-lg font-bold">{obs.tick} / 60</div>
+        <div class="text-lg font-bold">{obs.tick}</div>
       </div>
       <div class="bg-gray-800 rounded p-3">
         <div class="text-xs text-gray-400">Survival Score</div>
