@@ -117,9 +117,9 @@ The `survival_score` is initialized based on task difficulty and updated by two 
 | Active outage (per tick) | **−tier_rate × tick_cost** | Persists until resolved |
 | `resolve_outage` | 0.00 | Stops bleed, no recovery |
 | `query_dpi` / `wait` | 0.00 | Tick cost only |
-| Timeout (tick > 60) | **−1.00** | Terminal failure |
+| Timeout (tick > tick_limit) | **−1.00** | Terminal failure |
 
-All scores are mathematically clamped to `(0.11, 0.89)` — strictly inside `(0, 1)` — ensuring the environment never produces boundary values that break automated validators.
+All scores are mathematically clamped to `(0.12, 0.88)` — strictly inside `(0, 1)` — ensuring the environment never produces boundary values that break automated validators.
 
 ### 5. Concurrent Infrastructure
 
@@ -159,7 +159,7 @@ Three task configurations covering the full difficulty spectrum:
 | `hard` | 6 | 0.13 / tick | 70 | 0.65 |
 | `expert` | 8 | 0.20 / tick | 55 | 0.55 |
 
-All tasks produce grader scores strictly in `(0.11, 0.89)` — validated by 114 automated tests.
+All tasks produce grader scores strictly in `(0.12, 0.88)` — validated by 60 automated tests.
 
 ---
 
@@ -252,7 +252,7 @@ app/
   app.py              FastAPI server — HTTP, WebSocket, MCP, SIEM dashboard
   session_manager.py  Episode state, pivot logic, tier assignment, asyncio.Lock
   soc_grader.py       Tiered SLA penalties and hybrid Shock+Bleed reward function
-  episode_grader.py   Episode-level scoring — strictly in (0.11, 0.89)
+  episode_grader.py   Episode-level scoring — strictly in (0.12, 0.88)
   models.py           Pydantic v2 Action / Observation / GradeResult models
   kill_chain.py       3-stage FSM (Recon → Lateral Movement → Exfiltration)
   seed_engine.py      Deterministic role assignment via random.Random(seed)
@@ -260,9 +260,9 @@ app/
   dpi_loader.py       DPI template loader per kill chain stage
 
 tasks/
-  easy.yaml           2 decoys, 0.05 penalty rate, 100 max steps
-  medium.yaml         4 decoys, 0.10 penalty rate, 85 max steps
-  hard.yaml           4 decoys, 0.10 penalty rate, 75 max steps
+  easy.yaml           2 decoys, 0.03 penalty rate, 100 max steps
+  medium.yaml         3 decoys, 0.07 penalty rate, 85 max steps
+  hard.yaml           6 decoys, 0.13 penalty rate, 70 max steps
 
 tests/
   unit/               Component-level tests (grader, session, kill chain, seed)
@@ -278,7 +278,7 @@ requirements.txt      Pinned dependencies
 
 ## Why This Environment Is Hard
 
-A random agent on `hard` scores ~0.35. A greedy "always block the first suspicious IP" agent scores ~0.40. Reaching 0.70+ requires:
+A random agent on `hard` scores ~0.20. A greedy "always block the first suspicious IP" agent scores ~0.30. Reaching 0.55+ requires:
 
 1. **Forensic discipline** — query before blocking to avoid CRITICAL-tier false positives
 2. **Pivot awareness** — detect and respond to the `PIVOT DETECTED` alert mid-episode
@@ -321,11 +321,9 @@ Verified output from `python inference.py --seed 42` — run it yourself to repr
 
 Scores degrade monotonically with difficulty — mathematically proven. A frontier LLM using `query_dpi` before `block_ip` is expected to score 0.55+ on easy and 0.35+ on expert. Any score below 0.15 indicates catastrophic SLA bleed.
 
-Score degrades monotonically with difficulty — mathematically proven difficulty scaling. A frontier LLM using `query_dpi` before `block_ip` is expected to score 0.70+ on hard/expert. Any score below 0.20 indicates catastrophic SLA bleed.
-
 | Agent | Task | Avg Score (seeds 1,7,42) | Behavior Observed |
 |---|---|---|---|
-| Random Policy | hard | 0.20 | Blocks random IPs, triggers CRITICAL SLA bleed immediately, score floors at 0.11 |
+| Random Policy | hard | 0.20 | Blocks random IPs, triggers CRITICAL SLA bleed immediately, score floors at 0.12 |
 | Greedy Policy (block first suspicious) | hard | 0.38 | Ignores DPI cost, causes Finance DB outages, no pivot recovery |
 | LLM (Qwen2.5-72B-Instruct) | hard | 0.65+ | Queries DPI before blocking, detects pivot alerts, manages tick budget |
 | Optimal (query → confirm → block) | hard | 0.83 | Full forensic discipline, zero false positives, resolves outages before bleed |
