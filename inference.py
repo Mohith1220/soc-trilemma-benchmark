@@ -112,11 +112,17 @@ def start_server() -> bool:
     """Start uvicorn in background if ENV_URL is localhost and server not already up."""
     global _server_proc
 
-    # Check if already running
+    # Check if already running (covers CI pre-started server and HF Space)
     if _is_healthy():
+        print("[INFO] Server already running.", flush=True)
         return True
 
-    # Only auto-start if targeting localhost
+    # If ENV_URL was explicitly set externally, don't try to start — caller owns the server
+    if os.environ.get("ENV_URL"):
+        print(f"[WARN] ENV_URL set but server not reachable at {ENV_URL}", flush=True)
+        return False
+
+    # Only auto-start for localhost
     if "localhost" not in ENV_URL and "127.0.0.1" not in ENV_URL:
         return False
 

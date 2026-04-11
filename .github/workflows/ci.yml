@@ -23,23 +23,35 @@ jobs:
       - name: Run unit tests
         run: python -m pytest tests/unit/ -v
 
-      - name: Run inference (baseline policy, seed 42)
-        run: python inference.py --seed 42
-
-      - name: Verify inference output format
+      - name: Start environment server
         run: |
-          output=$(python inference.py --seed 42)
+          uvicorn app.app:app --host 0.0.0.0 --port 7860 &
+          # Wait for server to be ready
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:7860/health; then
+              echo "Server ready"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run inference and verify output
+        run: |
+          output=$(ENV_URL=http://localhost:7860 python inference.py --seed 42)
           echo "$output"
-          # Must have at least 3 [END] lines with score strictly between 0 and 1
+
+          # Must have at least 3 [END] lines
           end_count=$(echo "$output" | grep -c '^\[END\]')
           echo "Found $end_count [END] lines"
           if [ "$end_count" -lt 3 ]; then
             echo "ERROR: Need at least 3 [END] lines, got $end_count"
             exit 1
           fi
-          # Check no score is 0.0 or 1.0
+
+          # No score exactly 0.0 or 1.0
           if echo "$output" | grep -E 'score=(0\.0000|1\.0000)'; then
             echo "ERROR: Score is exactly 0.0 or 1.0"
             exit 1
           fi
+
           echo "All checks passed"
