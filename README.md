@@ -11,13 +11,14 @@ short_description: POMDP environment for agentic SOC triage under SLA pressure
 
 # 🛡️ SOC Trilemma Benchmark
 
-[![Tests](https://img.shields.io/badge/tests-114%20passing-brightgreen)]()
+[![CI](https://github.com/Mohith1220/soc-trilemma-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/Mohith1220/soc-trilemma-benchmark/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-60%20passing-brightgreen)]()
 [![OpenEnv](https://img.shields.io/badge/openenv%20validate-passed-blue)]()
 [![Tasks](https://img.shields.io/badge/tasks-4%20difficulties-orange)]()
 [![MCP](https://img.shields.io/badge/MCP-JSON--RPC%202.0-purple)]()
 [![Python](https://img.shields.io/badge/python-3.11-blue)]()
 [![Docker](https://img.shields.io/badge/docker-ready-green)]()
-[![HF Space](https://img.shields.io/badge/HF%20Space-live-yellow)]()
+[![HF Space](https://img.shields.io/badge/HF%20Space-live-yellow)](https://mohith1220-soc-trilemma-benchmark.hf.space)
 
 > A research-grade Reinforcement Learning environment where an LLM agent operates as an automated SOC analyst navigating a 3-stage Cyber Kill Chain — under strict SLA pressure, partial observability, and adversarial counter-intelligence.
 >
@@ -116,7 +117,10 @@ The `survival_score` is initialized based on task difficulty and updated by two 
 | Incorrect `block_ip` | **−0.12** | Instant shock + outage created |
 | Active outage (per tick) | **−tier_rate × tick_cost** | Persists until resolved |
 | `resolve_outage` | 0.00 | Stops bleed, no recovery |
-| `query_dpi` / `wait` | 0.00 | Tick cost only |
+| `query_dpi` | 0.00 | Reveals payload; 5-tick cost |
+| `wait` | 0.00 | 1-tick cost, observe only |
+| `allow_ip` | 0.00 | 1-tick cost, no state change |
+| `isolate_host` | 0.00 | 5-tick cost, no state change |
 | Timeout (tick > tick_limit) | **−1.00** | Terminal failure |
 
 All scores are mathematically clamped to `(0.12, 0.88)` — strictly inside `(0, 1)` — ensuring the environment never produces boundary values that break automated validators.
@@ -263,6 +267,7 @@ tasks/
   easy.yaml           2 decoys, 0.03 penalty rate, 100 max steps
   medium.yaml         3 decoys, 0.07 penalty rate, 85 max steps
   hard.yaml           6 decoys, 0.13 penalty rate, 70 max steps
+  expert.yaml         8 decoys, 0.20 penalty rate, 55 max steps
 
 tests/
   unit/               Component-level tests (grader, session, kill chain, seed)
