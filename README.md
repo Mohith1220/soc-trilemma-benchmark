@@ -27,7 +27,87 @@ short_description: LLM benchmark — SOC triage under SLA pressure
 
 ---
 
-## What Makes This Different
+## System Architecture
+
+The system follows a layered architecture with clear separation between the HTTP/WebSocket transport layer, the simulation engine, and the scoring/grading logic.
+
+```mermaid
+graph TD
+    Agent["RL Agent\n(inference.py)"]
+
+    subgraph Config["Config"]
+        YAML["Task YAML\n(easy.yaml /\nhard.yaml)"]
+        OE["openenv.yaml"]
+    end
+
+    subgraph FastAPI["FastAPI Server"]
+        WS["WebSocket Endpoint\n/ws"]
+        HTTP["HTTP Endpoints\n/reset  /step  /state"]
+    end
+
+    SM["Session Manager"]
+
+    subgraph SimEngine["Simulation Engine"]
+        SE["SeedEngine\n(deterministic\nIP assignment)"]
+        KC["KillChain FSM\n(Recon →\nLateralMovement →\nExfiltration)"]
+        TC["TickClock\n(action cost\naccounting)"]
+        DPI["DPI Template Loader\n(per-stage JSON templates)"]
+    end
+
+    subgraph Rendering["Rendering"]
+        PP["PrettyPrinter\n(JSON +\nHTML serialization)"]
+        RD["render_dashboard()\n(TailwindCSS\nHTML DOM)"]
+    end
+
+    subgraph Scoring["Scoring"]
+        SG["SOCGrader\n(reward + SLA\npenalty)"]
+        OT["OutageTracker\n(active\nBusiness Outages)"]
+    end
+
+    Agent --> HTTP
+    Agent --> WS
+    HTTP --> SM
+    WS --> SM
+    YAML --> SM
+    OE --> SM
+    SM --> SE
+    SM --> KC
+    KC --> TC
+    KC --> DPI
+    KC --> SG
+    SG --> OT
+    SM --> PP
+    PP --> RD
+```
+
+## Request Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant FastAPI
+    participant SessionManager
+    participant SimulationEngine
+    participant SOCGrader
+
+    Agent->>FastAPI: POST /reset {seed: 42}
+    FastAPI->>SessionManager: create_or_reset(seed=42)
+    SessionManager->>SimulationEngine: initialize(seed=42)
+    SimulationEngine-->>SessionManager: initial_observation
+    SessionManager-->>FastAPI: Observation
+    FastAPI-->>Agent: {dom, alerts:[], score:1.0, done:false}
+
+    Agent->>FastAPI: POST /step {action_type: "block_ip", target_ip: "10.0.0.5"}
+    FastAPI->>SessionManager: step(action)
+    SessionManager->>SimulationEngine: apply_action(action)
+    SimulationEngine->>SOCGrader: grade(action, attacker_ip)
+    SOCGrader-->>SimulationEngine: reward, outages
+    SimulationEngine-->>SessionManager: next_observation
+    SessionManager-->>FastAPI: Observation
+    FastAPI-->>Agent: {dom, alerts, score, done}
+```
+
+
 
 Most security benchmarks ask: *"Did the agent block the attacker?"*
 
@@ -223,11 +303,32 @@ The agent that blocked a decoy at t=3 entered the pivot event with 0.13 survival
 
 ---
 
-## Quick Start
+## ✅ OpenEnv Compliance
+
+Fully verified against the `openenv-http/1.x` profile on the live Hugging Face deployment:
 
 ```bash
-# Install and run locally
+$ python -m openenv.cli validate --url https://mohith1220-soc-trilemma-benchmark.hf.space
+[OK] 6/6 checks passed.
+- openapi_version_available: PASS
+- health_endpoint:           PASS
+- metadata_endpoint:         PASS
+- schema_endpoint:           PASS
+- mcp_endpoint:              PASS
+- mode_endpoint_consistency: PASS
+```
+
+---
+
+## Quick Start
+
+### Running Locally
+
+```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Start the server
 uvicorn app.app:app --host 0.0.0.0 --port 7860
 
 # Baseline inference (random policy, no credentials needed)
@@ -238,6 +339,15 @@ export API_BASE_URL=https://router.huggingface.co/v1
 export MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
 export HF_TOKEN=hf_...
 python inference.py --seed 42
+```
+
+### Docker Execution (Phase 2 Automated Graders)
+
+The environment is fully containerized and HF Spaces ready. Build and run locally:
+
+```bash
+docker build -t soc-trilemma-env .
+docker run -p 7860:7860 soc-trilemma-env
 ```
 
 ---
@@ -279,7 +389,7 @@ tests/
   property/           Hypothesis property tests
 
 inference.py          Self-contained — no app.* imports, starts server via subprocess
-openenv.yaml          OpenEnv spec_version=1 manifest — 4 tasks with pass_criteria
+**openenv.yaml**      OpenEnv spec_version=1 manifest — 4 tasks with pass_criteria
 Dockerfile            UID 1000, HEALTHCHECK, port 7860, HF Spaces ready
 requirements.txt      Pinned dependency ranges
 ```
