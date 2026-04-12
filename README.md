@@ -13,7 +13,7 @@ short_description: LLM benchmark — SOC triage under SLA pressure
 
 [![CI](https://github.com/Mohith1220/soc-trilemma-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/Mohith1220/soc-trilemma-benchmark/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-60%20passing-brightgreen)]()
-[![OpenEnv](https://img.shields.io/badge/openenv%20spec__version-1-blue)]()
+[![OpenEnv](https://img.shields.io/badge/openenv-spec__v1-blue)]()
 [![Tasks](https://img.shields.io/badge/tasks-4%20difficulties-orange)]()
 [![MCP](https://img.shields.io/badge/MCP-JSON--RPC%202.0-purple)]()
 [![Python](https://img.shields.io/badge/python-3.11-blue)]()
@@ -27,18 +27,18 @@ short_description: LLM benchmark — SOC triage under SLA pressure
 
 ---
 
-## What Makes This Different — In 30 Seconds
+## What Makes This Different
 
 Most security benchmarks ask: *"Did the agent block the attacker?"*
 
-This one asks: *"Did the agent block the attacker without taking down the Finance database?"*
+This one asks: *"Did the agent block the attacker **without taking down the Finance database**?"*
 
 A greedy agent that blocks every suspicious IP scores **0.30**. An agent that investigates first, prioritizes by business impact, and adapts when the attacker pivots scores **0.83**. That gap is the benchmark signal.
 
 The mechanism: a **Shock + Bleed** reward function. Every wrong block creates a `BusinessOutage` that drains the survival score every tick until resolved. A CRITICAL-tier asset (Finance DB) bleeds **15× faster** than a LOW-tier asset (Guest WiFi). The agent must reason about *which* IP to investigate — not just *whether* to act.
 
 ```
-Random policy (seed 42):   easy=0.26  medium=0.23  hard=0.20  expert=0.17
+Random policy (seed 42):    easy=0.26  medium=0.23  hard=0.20  expert=0.17
 Optimal policy (estimated): easy=0.83  medium=0.75  hard=0.65  expert=0.50
 ```
 
@@ -46,7 +46,7 @@ Optimal policy (estimated): easy=0.83  medium=0.75  hard=0.65  expert=0.50
 
 ## The Security Trilemma
 
-Three constraints that cannot all be satisfied by a greedy strategy:
+Three constraints that no greedy strategy can satisfy simultaneously:
 
 | Dimension | Constraint | Failure Mode |
 |---|---|---|
@@ -65,18 +65,20 @@ The only winning strategy: **investigate → confirm → block → resolve**. An
 | Property | Implementation |
 |---|---|
 | **State** | Attacker IP, decoy IPs, tier assignments, active outages, kill chain stage |
-| **Observation** | Masked DPI entries — all IPs show `"Standard Traffic"` until `query_dpi` is called |
+| **Observation** | Partially masked — attacker IP hidden until `query_dpi` reveals it; decoys show realistic benign traffic as noise |
 | **Actions** | `block_ip`, `query_dpi`, `resolve_outage`, `wait`, `allow_ip`, `isolate_host` |
 | **Reward** | Hybrid Shock + Bleed — continuous, business-weighted, never binary |
 | **Transitions** | Adversarial — attacker pivots if probed during Lateral Movement |
 | **Termination** | Correct block (success) or tick budget exhausted (failure) |
 
+**Partial observability in practice:** On reset, 17 of 20 IPs show `"Standard Traffic"`. The 3 decoy IPs show realistic benign traffic (scheduled backups, Nessus scans, Kerberos renewals) — designed to trigger false positives. The attacker blends in as `"Standard Traffic"` until `query_dpi` is called on it, which reveals a Suricata-style malicious signature.
+
 ### Kill Chain FSM
 
 ```
-Recon (ticks 0–budget) → Lateral Movement → Exfiltration
-                                                    ↓
-                                         tick > budget → mission failed
+Recon → Lateral Movement → Exfiltration
+                                ↓
+                    tick > budget → mission failed
 ```
 
 Each task has its own tick budget (sum of `stage_time_budgets`). The clock never stops.
@@ -84,15 +86,14 @@ Each task has its own tick budget (sum of `stage_time_budgets`). The clock never
 ### Shock + Bleed Reward Function
 
 ```python
-# Correct block: instant reward
-survival_score += 0.18  # episode ends
+# Correct block: instant reward, episode ends
+survival_score += 0.18
 
-# Wrong block: shock + persistent bleed
-survival_score -= 0.12  # instant shock
-# Every subsequent tick:
-survival_score -= tier_penalty * tick_cost  # CRITICAL=0.15, INTERNAL=0.05, LOW=0.01
+# Wrong block: instant shock + persistent bleed per tick
+survival_score -= 0.12                          # shock
+survival_score -= tier_penalty * tick_cost      # bleed: CRITICAL=0.15, INTERNAL=0.05, LOW=0.01
 
-# Resolve outage: stops bleed (no recovery)
+# resolve_outage: stops bleed (no score recovery)
 # Timeout: terminal penalty
 survival_score -= 1.00
 ```
@@ -115,16 +116,14 @@ This invalidates any static memorization strategy. The agent must reason dynamic
 
 ## Task Difficulties
 
-Four tasks with qualitatively distinct challenges:
+| Task | Decoys | SLA Penalty/tick | Max Steps | Tick Budget | Baseline Score |
+|---|---|---|---|---|---|
+| `easy` | 2 | 0.03 | 100 | 75 | 0.2620 |
+| `medium` | 3 | 0.07 | 85 | 60 | 0.2320 |
+| `hard` | 6 | 0.13 | 70 | 47 | 0.2020 |
+| `expert` | 8 | 0.20 | 55 | 33 | 0.1720 |
 
-| Task | Decoys | SLA Penalty/tick | Tick Budget | Baseline Score |
-|---|---|---|---|---|
-| `easy` | 2 | 0.03 | 75 | 0.2620 |
-| `medium` | 3 | 0.07 | 60 | 0.2320 |
-| `hard` | 6 | 0.13 | 47 | 0.2020 |
-| `expert` | 8 | 0.20 | 33 | 0.1720 |
-
-Baseline = seeded random policy, seed 42. Scores degrade monotonically — mathematically verified.
+Baseline = seeded random policy, seed 42. Scores degrade monotonically — verified.
 
 ---
 
@@ -164,12 +163,12 @@ Real trace, medium task, seed=7:
 
 ```
 [t=03] block_ip(10.0.0.12)  score=0.53  → OUTAGE [INTERNAL] bleed 0.05/tick
-[t=08] query_dpi(10.0.0.8)  score=0.28  → payload: MALICIOUS SIGNATURE DETECTED
-[t=26] query_dpi(10.0.0.8)  score=0.12  → PIVOT DETECTED: attacker → 10.0.0.12
+[t=08] query_dpi(10.0.0.8)  score=0.28  → payload revealed: MALICIOUS SIGNATURE
+[t=26] query_dpi(10.0.0.8)  score=0.13  → PIVOT DETECTED: attacker → 10.0.0.12
 [t=30] block_ip(10.0.0.12)  score=0.29  → ✅ Correct block. Episode ends.
 ```
 
-The agent that blocked a decoy at t=3 entered the pivot event with 0.12 survival. A disciplined agent (query first) would have entered with 0.65+.
+The agent that blocked a decoy at t=3 entered the pivot event with 0.13 survival. A disciplined agent (query first) would have entered with 0.65+.
 
 ---
 
@@ -192,7 +191,7 @@ The agent that blocked a decoy at t=3 entered the pivot event with 0.12 survival
 
 ```json
 {
-  "action_type": "block_ip | query_dpi | resolve_outage | wait",
+  "action_type": "block_ip | query_dpi | resolve_outage | wait | allow_ip | isolate_host",
   "target_ip": "10.0.0.5",
   "session_id": "agent-run-1"
 }
@@ -207,26 +206,34 @@ The agent that blocked a decoy at t=3 entered the pivot event with 0.12 survival
   "survival_score": 0.71,
   "done": false,
   "dpi_data": {
-    "entries": [{"src_ip": "10.0.0.5", "payload_summary": "Standard Traffic", "flags": []}],
-    "attacker_ip": "10.0.0.5",
-    "decoy_ips": ["10.0.0.2", "10.0.0.3"]
+    "entries": [
+      {"src_ip": "10.0.0.5", "payload_summary": "Standard Traffic", "flags": []},
+      {"src_ip": "10.0.0.6", "payload_summary": "Nessus/10.3.1 scheduled scan | Normal", "flags": []}
+    ],
+    "attacker_ip": "",
+    "decoy_ips": []
   },
-  "alerts": [{"tick": 10, "severity": "critical", "message": "Kill chain advanced to Lateral_Movement"}]
+  "alerts": [
+    {"tick": 10, "severity": "critical", "message": "Kill chain advanced to Lateral_Movement"}
+  ]
 }
 ```
+
+> **Note:** `attacker_ip` and `decoy_ips` are always returned as empty — the true attacker identity is hidden from the agent (POMDP). Use `query_dpi` to reveal payloads and identify the attacker.
 
 ---
 
 ## Quick Start
 
 ```bash
+# Install and run locally
 pip install -r requirements.txt
 uvicorn app.app:app --host 0.0.0.0 --port 7860
 
-# Baseline (random policy)
+# Baseline inference (random policy, no credentials needed)
 python inference.py --seed 42
 
-# LLM policy
+# LLM policy (inject credentials)
 export API_BASE_URL=https://router.huggingface.co/v1
 export MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
 export HF_TOKEN=hf_...
@@ -252,28 +259,29 @@ Returns 4 tools: `query_dpi`, `block_ip`, `resolve_outage`, `wait` — each with
 ```
 app/
   app.py              FastAPI — HTTP, WebSocket, MCP JSON-RPC, SIEM dashboard
-  session_manager.py  Episode state, pivot logic, tier assignment, asyncio.Lock
+  session_manager.py  Episode state, pivot logic, tier assignment, threading.Lock
   soc_grader.py       Shock+Bleed reward — tiered SLA penalties
   episode_grader.py   Episode scoring — strictly in (0.12, 0.88)
   models.py           Pydantic v2 Action/Observation/GradeResult
-  kill_chain.py       3-stage FSM
+  kill_chain.py       3-stage FSM (Recon → Lateral Movement → Exfiltration)
   seed_engine.py      Deterministic role assignment via random.Random(seed)
-  config.py           Task YAML loader
+  config.py           Task YAML loader and validator
   dpi_loader.py       Stage-specific DPI templates
 
 tasks/
-  easy.yaml           2 decoys, 0.03/tick, 100 max steps
-  medium.yaml         3 decoys, 0.07/tick, 85 max steps
-  hard.yaml           6 decoys, 0.13/tick, 70 max steps
-  expert.yaml         8 decoys, 0.20/tick, 55 max steps
+  easy.yaml           2 decoys, 0.03/tick, 100 max steps, tick budget 75
+  medium.yaml         3 decoys, 0.07/tick, 85 max steps, tick budget 60
+  hard.yaml           6 decoys, 0.13/tick, 70 max steps, tick budget 47
+  expert.yaml         8 decoys, 0.20/tick, 55 max steps, tick budget 33
 
 tests/
   unit/               60 tests — grader, session, kill chain, seed, config
   property/           Hypothesis property tests
 
 inference.py          Self-contained — no app.* imports, starts server via subprocess
-openenv.yaml          OpenEnv spec_version=1 manifest
-Dockerfile            UID 1000, HEALTHCHECK, port 7860
+openenv.yaml          OpenEnv spec_version=1 manifest — 4 tasks with pass_criteria
+Dockerfile            UID 1000, HEALTHCHECK, port 7860, HF Spaces ready
+requirements.txt      Pinned dependency ranges
 ```
 
 ---
@@ -281,13 +289,16 @@ Dockerfile            UID 1000, HEALTHCHECK, port 7860
 ## Technical Q&A
 
 **Q: Why is this a POMDP and not an MDP?**
-The agent never observes the attacker IP directly. All 20 IPs show identical `"Standard Traffic"` until `query_dpi` is called. The true state (which IP is the attacker, which tier each IP holds) is hidden. The agent must form a belief state through sequential queries.
+The agent never observes the attacker IP directly — `attacker_ip` is always returned as `""` in the API response. All 20 IPs start as `"Standard Traffic"`. The agent must call `query_dpi` to reveal payloads and identify the attacker through sequential investigation.
 
 **Q: How is concurrency handled?**
-Each session has an `asyncio.Lock`. The `/step` HTTP endpoint uses synchronous locking; the `/ws` WebSocket endpoint uses `async with state.lock`. Sessions are stored in an `OrderedDict` with LRU eviction at 100 sessions. No shared mutable state between sessions.
+Each session has both a `threading.Lock` (for HTTP `/step` requests) and an `asyncio.Lock` (for WebSocket `/ws` steps). Sessions are stored in an `OrderedDict` with LRU eviction at 100 sessions. No shared mutable state between sessions.
 
 **Q: What happens if the MCP endpoint receives a malformed request?**
-The `/mcp` endpoint returns a valid JSON-RPC 2.0 error response (`{"error": {"code": -32601, "message": "..."}}`) for unknown methods. It never raises an HTTP 500. Unknown tools return error code -32601; execution errors return -32603.
+The `/mcp` endpoint always returns a valid JSON-RPC 2.0 response — never an HTTP 500. Unknown methods return `{}`, unknown tools return error code `-32601`, execution errors return `-32603`. Each MCP call gets an isolated session derived from the request ID.
+
+**Q: How are scores guaranteed to be strictly between 0 and 1?**
+All survival scores are clamped via `max(0.12, min(0.88, score))` at every mutation point in `soc_grader.py`. The episode grader applies the same clamp. The validator will never see 0.0 or 1.0.
 
 ---
 
@@ -295,10 +306,9 @@ The `/mcp` endpoint returns a valid JSON-RPC 2.0 error response (`{"error": {"co
 
 If Round 1 clears, the minimal path to a live LLM demo:
 
-1. **Point `API_BASE_URL` at HF Inference API** — inference.py already supports this with zero code changes
-2. **Run `python inference.py --seed 42` with LLM credentials** — produces a live scored trace in ~60 seconds
-3. **Record the terminal output** — the `[START]/[STEP]/[END]` format is already judge-readable
-4. **Key metric to show**: LLM score on `hard` > 0.50 vs random baseline 0.20 — that's the proof of reasoning
+1. Set `API_BASE_URL`, `MODEL_NAME`, `HF_TOKEN` and run `python inference.py --seed 42`
+2. Zero code changes needed — inference.py already uses the OpenAI client with injected credentials
+3. Key metric: LLM score on `hard` > 0.50 vs random baseline 0.20 — a 2.5× improvement proves reasoning
 
 ---
 
