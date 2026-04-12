@@ -1,14 +1,3 @@
----
-title: SOC Trilemma Benchmark
-emoji: 🛡️
-colorFrom: green
-colorTo: blue
-sdk: docker
-app_port: 7860
-license: mit
-short_description: LLM benchmark — SOC triage under SLA pressure
----
-
 # 🛡️ SOC Trilemma Benchmark
 
 [![CI](https://github.com/Mohith1220/soc-trilemma-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/Mohith1220/soc-trilemma-benchmark/actions/workflows/ci.yml)
